@@ -884,7 +884,6 @@ function renderElement(
               flexDirection: "column",
               gap,
               padding,
-              flex: 1,
             }),
           },
           children
