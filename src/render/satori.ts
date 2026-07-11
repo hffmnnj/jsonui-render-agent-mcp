@@ -239,14 +239,14 @@ function renderElement(
     }
     case "Grid": {
       // Satori/Yoga has no CSS grid — emulate equal columns with flex-wrap.
-      // Each child sits in a cell whose basis reserves an equal share of the
-      // row minus the inter-cell gaps, so `columns` per row wrap cleanly.
+      // Satori also rejects `calc()`, so cells use a plain percentage basis
+      // (100% / columns) and the gap is a per-cell right/bottom gutter. The
+      // container's negative right/bottom margin cancels the trailing gutter so
+      // the grid still fills its width exactly (the classic negative-margin
+      // gutter technique, which Yoga supports for both % basis and -margin).
       const columns = Math.max(1, Math.trunc((props.columns as number | undefined) ?? 2));
       const gap = (props.gap as number | undefined) ?? 0;
-      const basis =
-        columns === 1
-          ? "100%"
-          : `calc((100% - ${gap * (columns - 1)}px) / ${columns})`;
+      const basis = `${100 / columns}%`;
       const cells = children.map((child, index) =>
         createElement(
           "div",
@@ -259,6 +259,9 @@ function renderElement(
               flexShrink: 0,
               flexBasis: basis,
               maxWidth: basis,
+              paddingRight: gap,
+              paddingBottom: gap,
+              boxSizing: "border-box",
             },
           },
           child
@@ -272,7 +275,8 @@ function renderElement(
             display: "flex",
             flexDirection: "row",
             flexWrap: "wrap",
-            gap,
+            marginRight: gap ? -gap : undefined,
+            marginBottom: gap ? -gap : undefined,
             alignItems: props.alignItems as CSSProperties["alignItems"],
             justifyContent: props.justifyContent as CSSProperties["justifyContent"],
             padding: props.padding as CSSProperties["padding"],
