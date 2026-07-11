@@ -1,6 +1,12 @@
 import { z } from "zod";
 
 const colorValue = z.union([z.string(), z.object({ $theme: z.string() })]);
+/** A string prop that may instead be supplied as a `$theme` ref (e.g. an
+ * `elevation.*` box-shadow token that resolves to a literal shadow string). */
+const themeableString = z.union([z.string(), z.object({ $theme: z.string() })]);
+/** A numeric prop that may instead be supplied as a `$theme` ref (e.g. a
+ * `radius.*` / `spacing.*` token that resolves to a literal px number). */
+const themeableNumber = z.union([z.number(), z.object({ $theme: z.string() })]);
 const alignItems = z.enum(["flex-start", "center", "flex-end", "stretch"]);
 const justifyContent = z.enum([
   "flex-start",
@@ -259,3 +265,123 @@ export const dividerPropsSchema = z.object({
   margin: z.number().nullable().optional(),
 });
 export type DividerProps = z.infer<typeof dividerPropsSchema>;
+
+/* ------------------------------------------------------------------ *
+ * Composite primitives (Wave 3, Task 3.3): Card, Table, Progress.     *
+ *                                                                     *
+ * Card is REGION-BEARING: because the spec tree is a flat keyed map   *
+ * whose `children` are element KEYS, Card's optional `header`/`footer`*
+ * regions are likewise arrays of element keys (resolved through the   *
+ * same renderer), while the required `body` uses the standard         *
+ * `children` slot. Table and Progress are self-contained leaf-data    *
+ * components — they carry their data in props and emit no child keys. *
+ *                                                                     *
+ * Every visual color is supplied as a `$theme` ref (or filled by      *
+ * `componentDefaults`) so it resolves to a literal through the SAME   *
+ * theme pass as every other component — no hardcoded colors survive   *
+ * into Satori.                                                        *
+ * ------------------------------------------------------------------ */
+
+/**
+ * Card — a surface container with optional `header` and `footer` regions and a
+ * required `body`. `header`/`footer` are arrays of child-element keys (rendered
+ * in their own padded regions, separated from the body by a hairline);  the
+ * body is supplied via the standard `children` slot. Surface background, border,
+ * radius, padding, and elevation are token-driven (filled by `componentDefaults`
+ * when omitted, so a bare Card is still theme-correct).
+ */
+export const cardPropsSchema = z.object({
+  /** Child-element keys rendered in the header region (above the body). */
+  header: z.array(z.string()).nullable().optional(),
+  /** Child-element keys rendered in the footer region (below the body). */
+  footer: z.array(z.string()).nullable().optional(),
+  backgroundColor: colorValue.nullable().optional(),
+  borderColor: colorValue.nullable().optional(),
+  borderWidth: z.number().nullable().optional(),
+  borderRadius: themeableNumber.nullable().optional(),
+  /** Uniform inner padding for every region, in px. */
+  padding: themeableNumber.nullable().optional(),
+  /** Spacing between stacked body children, in px. */
+  gap: themeableNumber.nullable().optional(),
+  /** Box-shadow string (usually a `$theme: "elevation.*"` ref). */
+  elevation: themeableString.nullable().optional(),
+  /** Hairline color drawn between header/body/footer regions. */
+  dividerColor: colorValue.nullable().optional(),
+  width: z.union([z.number(), z.string()]).nullable().optional(),
+  flex: z.number().nullable().optional(),
+});
+export type CardProps = z.infer<typeof cardPropsSchema>;
+
+/**
+ * A single table cell — a plain string, or a `{ text, align?, color? }` object
+ * for per-cell alignment/emphasis. Colors accept `$theme` refs.
+ */
+const tableCell = z.union([
+  z.string(),
+  z.object({
+    text: z.string(),
+    align: z.enum(["left", "center", "right"]).nullable().optional(),
+    color: colorValue.nullable().optional(),
+  }),
+]);
+
+/** A table row — either a bare array of cells or a `{ cells }` wrapper. */
+const tableRow = z.union([
+  z.array(tableCell),
+  z.object({ cells: z.array(tableCell) }),
+]);
+
+/**
+ * Table — a header row plus data rows. `header` is an optional array of column
+ * cells styled distinctly (semibold on a muted surface); `rows` is the required
+ * body (each row an array of cells or a `{ cells }` object). Alternating-row
+ * striping (`striped`, default on) and cell padding are token-driven. All colors
+ * accept `$theme` refs and fall back to theme-correct defaults.
+ */
+export const tablePropsSchema = z.object({
+  header: z.array(tableCell).nullable().optional(),
+  rows: z.array(tableRow).min(1),
+  /** Zebra-stripe alternate body rows. Defaults to true. */
+  striped: z.boolean().nullable().optional(),
+  /** Draw a hairline under each row. Defaults to true. */
+  rowBorders: z.boolean().nullable().optional(),
+  cellPaddingX: z.number().nullable().optional(),
+  cellPaddingY: z.number().nullable().optional(),
+  fontSize: z.number().nullable().optional(),
+  backgroundColor: colorValue.nullable().optional(),
+  headerBackgroundColor: colorValue.nullable().optional(),
+  headerColor: colorValue.nullable().optional(),
+  color: colorValue.nullable().optional(),
+  borderColor: colorValue.nullable().optional(),
+  stripeColor: colorValue.nullable().optional(),
+  borderRadius: z.number().nullable().optional(),
+  borderWidth: z.number().nullable().optional(),
+});
+export type TableProps = z.infer<typeof tablePropsSchema>;
+
+/**
+ * Progress — a linear progress bar. The fill width is `value / max` clamped to
+ * 0–100%. Track and fill colors, `height`, and `radius` are token-driven. An
+ * optional `label` / percentage readout can sit above the bar.
+ */
+export const progressPropsSchema = z.object({
+  value: z.number(),
+  /** Denominator for the fill ratio. Defaults to 100. */
+  max: z.number().positive().nullable().optional(),
+  /** Track (background) color. Use a `$theme.color.*` ref. */
+  trackColor: colorValue.nullable().optional(),
+  /** Fill (accent) color. Use a `$theme.color.*` ref. */
+  fillColor: colorValue.nullable().optional(),
+  /** Bar height in px. Defaults to 8. */
+  height: z.number().positive().nullable().optional(),
+  /** Corner radius in px. Defaults to a pill (height / 2). */
+  radius: z.number().nonnegative().nullable().optional(),
+  /** Optional caption shown above the bar. */
+  label: z.string().nullable().optional(),
+  /** Show the computed percentage next to the label. Defaults to false. */
+  showValue: z.boolean().nullable().optional(),
+  labelColor: colorValue.nullable().optional(),
+  fontSize: z.number().nullable().optional(),
+  width: z.union([z.number(), z.string()]).nullable().optional(),
+});
+export type ProgressProps = z.infer<typeof progressPropsSchema>;

@@ -602,6 +602,334 @@ function renderElement(
         rows
       );
     }
+    case "Card": {
+      // Region-bearing surface. `header`/`footer` are arrays of child-element
+      // KEYS (rendered through the same recursion, so they honor the cycle
+      // guard); the body is the standard `children` slot. Regions are separated
+      // by a hairline drawn as a bottom/top border rather than an extra element.
+      const padding = (props.padding as number | undefined) ?? 20;
+      const gap = (props.gap as number | undefined) ?? 12;
+      const bg = (props.backgroundColor as string | undefined) ?? "#fafafa";
+      const border = (props.borderColor as string | undefined) ?? "#e4e4e7";
+      const dividerColor = (props.dividerColor as string | undefined) ?? border;
+      const borderRadius = (props.borderRadius as number | undefined) ?? 8;
+      const borderWidth = (props.borderWidth as number | undefined) ?? 1;
+
+      const renderRegionKeys = (keys: unknown): ReactNode[] => {
+        if (!Array.isArray(keys)) return [];
+        return keys.map((childKey) =>
+          renderElement(spec, String(childKey), nextAncestors, rootWidth, rootHeight)
+        );
+      };
+
+      const sections: ReactNode[] = [];
+      const headerNodes = renderRegionKeys(props.header);
+      const footerNodes = renderRegionKeys(props.footer);
+
+      if (headerNodes.length > 0) {
+        sections.push(
+          createElement(
+            "div",
+            {
+              key: `${key}__header`,
+              style: cleanStyle({
+                display: "flex",
+                flexDirection: "column",
+                gap,
+                padding,
+                borderBottomWidth: borderWidth,
+                borderBottomColor: dividerColor,
+                borderBottomStyle: "solid",
+              }),
+            },
+            headerNodes
+          )
+        );
+      }
+
+      sections.push(
+        createElement(
+          "div",
+          {
+            key: `${key}__body`,
+            style: cleanStyle({
+              display: "flex",
+              flexDirection: "column",
+              gap,
+              padding,
+              flex: 1,
+            }),
+          },
+          children
+        )
+      );
+
+      if (footerNodes.length > 0) {
+        sections.push(
+          createElement(
+            "div",
+            {
+              key: `${key}__footer`,
+              style: cleanStyle({
+                display: "flex",
+                flexDirection: "column",
+                gap,
+                padding,
+                borderTopWidth: borderWidth,
+                borderTopColor: dividerColor,
+                borderTopStyle: "solid",
+              }),
+            },
+            footerNodes
+          )
+        );
+      }
+
+      return createElement(
+        "div",
+        {
+          key,
+          style: cleanStyle({
+            display: "flex",
+            flexDirection: "column",
+            backgroundColor: bg,
+            borderColor: border,
+            borderWidth,
+            borderStyle: "solid",
+            borderRadius,
+            boxShadow: props.elevation as string | undefined,
+            overflow: "hidden",
+            width: props.width as CSSProperties["width"],
+            flex: props.flex as CSSProperties["flex"],
+          }),
+        },
+        sections
+      );
+    }
+    case "Table": {
+      const rawRows = Array.isArray(props.rows) ? (props.rows as unknown[]) : [];
+      const header = Array.isArray(props.header) ? (props.header as unknown[]) : null;
+      const striped = props.striped !== false;
+      const rowBorders = props.rowBorders !== false;
+      const px = (props.cellPaddingX as number | undefined) ?? 12;
+      const py = (props.cellPaddingY as number | undefined) ?? 8;
+      const fontSize = (props.fontSize as number | undefined) ?? 14;
+      const bg = (props.backgroundColor as string | undefined) ?? "#ffffff";
+      const headerBg = (props.headerBackgroundColor as string | undefined) ?? "#f4f4f5";
+      const headerColor = (props.headerColor as string | undefined) ?? "#18181b";
+      const bodyColor = (props.color as string | undefined) ?? "#52525b";
+      const border = (props.borderColor as string | undefined) ?? "#e4e4e7";
+      const stripe = (props.stripeColor as string | undefined) ?? "#fafafa";
+      const borderRadius = (props.borderRadius as number | undefined) ?? 8;
+      const borderWidth = (props.borderWidth as number | undefined) ?? 1;
+
+      const cellText = (cell: unknown): string =>
+        typeof cell === "object" && cell !== null
+          ? String((cell as { text?: unknown }).text ?? "")
+          : String(cell);
+      const cellAlign = (cell: unknown): CSSProperties["justifyContent"] => {
+        const a =
+          typeof cell === "object" && cell !== null
+            ? ((cell as { align?: unknown }).align as string | undefined)
+            : undefined;
+        return a === "center" ? "center" : a === "right" ? "flex-end" : "flex-start";
+      };
+      const cellColor = (cell: unknown): string | undefined =>
+        typeof cell === "object" && cell !== null
+          ? ((cell as { color?: unknown }).color as string | undefined)
+          : undefined;
+
+      const buildCell = (
+        cell: unknown,
+        cellKey: string,
+        opts: { fontWeight: number; color: string }
+      ): ReactNode =>
+        createElement(
+          "div",
+          {
+            key: cellKey,
+            style: cleanStyle({
+              display: "flex",
+              flex: 1,
+              justifyContent: cellAlign(cell),
+              paddingTop: py,
+              paddingBottom: py,
+              paddingLeft: px,
+              paddingRight: px,
+              fontFamily: FONT_FAMILY,
+              fontSize,
+              fontWeight: opts.fontWeight,
+              color: cellColor(cell) ?? opts.color,
+              lineHeight: 1.4,
+            }),
+          },
+          cellText(cell)
+        );
+
+      const tableRows: ReactNode[] = [];
+
+      if (header) {
+        tableRows.push(
+          createElement(
+            "div",
+            {
+              key: `${key}__thead`,
+              style: cleanStyle({
+                display: "flex",
+                flexDirection: "row",
+                backgroundColor: headerBg,
+                borderBottomWidth: borderWidth,
+                borderBottomColor: border,
+                borderBottomStyle: "solid",
+              }),
+            },
+            header.map((cell, ci) =>
+              buildCell(cell, `${key}__h${ci}`, { fontWeight: 600, color: headerColor })
+            )
+          )
+        );
+      }
+
+      rawRows.forEach((row, ri) => {
+        const cells: unknown[] = Array.isArray(row)
+          ? row
+          : Array.isArray((row as { cells?: unknown }).cells)
+            ? ((row as { cells: unknown[] }).cells)
+            : [];
+        const isStriped = striped && ri % 2 === 1;
+        const isLast = ri === rawRows.length - 1;
+        tableRows.push(
+          createElement(
+            "div",
+            {
+              key: `${key}__r${ri}`,
+              style: cleanStyle({
+                display: "flex",
+                flexDirection: "row",
+                backgroundColor: isStriped ? stripe : undefined,
+                borderBottomWidth: rowBorders && !isLast ? borderWidth : undefined,
+                borderBottomColor: rowBorders && !isLast ? border : undefined,
+                borderBottomStyle: rowBorders && !isLast ? "solid" : undefined,
+              }),
+            },
+            cells.map((cell, ci) =>
+              buildCell(cell, `${key}__r${ri}c${ci}`, { fontWeight: 400, color: bodyColor })
+            )
+          )
+        );
+      });
+
+      return createElement(
+        "div",
+        {
+          key,
+          style: cleanStyle({
+            display: "flex",
+            flexDirection: "column",
+            backgroundColor: bg,
+            borderColor: border,
+            borderWidth,
+            borderStyle: "solid",
+            borderRadius,
+            overflow: "hidden",
+          }),
+        },
+        tableRows
+      );
+    }
+    case "Progress": {
+      const value = typeof props.value === "number" ? props.value : 0;
+      const max = (props.max as number | undefined) ?? 100;
+      const ratio = max > 0 ? value / max : 0;
+      const pct = Math.max(0, Math.min(100, ratio * 100));
+      const height = (props.height as number | undefined) ?? 8;
+      const radius = (props.radius as number | undefined) ?? height / 2;
+      const track = (props.trackColor as string | undefined) ?? "#f4f4f5";
+      const fill = (props.fillColor as string | undefined) ?? "#4f46e5";
+      const label = props.label as string | undefined;
+      const showValue = props.showValue === true;
+      const labelColor = (props.labelColor as string | undefined) ?? "#52525b";
+      const fontSize = (props.fontSize as number | undefined) ?? 13;
+
+      const bar = createElement(
+        "div",
+        {
+          key: `${key}__track`,
+          style: cleanStyle({
+            display: "flex",
+            width: "100%",
+            height,
+            backgroundColor: track,
+            borderRadius: radius,
+            overflow: "hidden",
+          }),
+        },
+        createElement("div", {
+          key: `${key}__fill`,
+          style: cleanStyle({
+            display: "flex",
+            width: `${pct}%`,
+            height: "100%",
+            backgroundColor: fill,
+            borderRadius: radius,
+          }),
+        })
+      );
+
+      if (!label && !showValue) {
+        return createElement(
+          "div",
+          {
+            key,
+            style: cleanStyle({
+              display: "flex",
+              flexDirection: "column",
+              width: (props.width as CSSProperties["width"]) ?? "100%",
+            }),
+          },
+          bar
+        );
+      }
+
+      const caption = createElement(
+        "div",
+        {
+          key: `${key}__label`,
+          style: cleanStyle({
+            display: "flex",
+            flexDirection: "row",
+            justifyContent: label && showValue ? "space-between" : "flex-start",
+            fontFamily: FONT_FAMILY,
+            fontSize,
+            color: labelColor,
+            marginBottom: 6,
+          }),
+        },
+        [
+          createElement("div", { key: `${key}__label_t`, style: { display: "flex" } }, label ?? ""),
+          showValue
+            ? createElement(
+                "div",
+                { key: `${key}__label_v`, style: { display: "flex" } },
+                `${Math.round(pct)}%`
+              )
+            : null,
+        ]
+      );
+
+      return createElement(
+        "div",
+        {
+          key,
+          style: cleanStyle({
+            display: "flex",
+            flexDirection: "column",
+            width: (props.width as CSSProperties["width"]) ?? "100%",
+          }),
+        },
+        [caption, bar]
+      );
+    }
     default:
       throw new Error(`Unsupported render component "${element.type}" at element "${key}".`);
   }

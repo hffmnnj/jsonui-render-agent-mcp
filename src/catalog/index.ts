@@ -6,14 +6,17 @@ import {
   avatarPropsSchema,
   badgePropsSchema,
   boxPropsSchema,
+  cardPropsSchema,
   dividerPropsSchema,
   framePropsSchema,
   gridPropsSchema,
   headingPropsSchema,
   listPropsSchema,
+  progressPropsSchema,
   rowPropsSchema,
   spacerPropsSchema,
   stackPropsSchema,
+  tablePropsSchema,
   textPropsSchema,
 } from "./schema";
 
@@ -153,6 +156,49 @@ export const catalog = defineCatalog(schema, {
         "Thin separator line. `orientation` picks the axis; pass a `$theme.color.*` color to track the theme.",
       example: { orientation: "horizontal", color: { $theme: "color.border" } },
     },
+    Card: {
+      props: cardPropsSchema,
+      slots: ["default"],
+      description:
+        "Surface container with optional `header`/`footer` regions (arrays of child-element keys) and a required body (children slot). Background/border/radius/elevation are token-driven; a bare Card auto-themes.",
+      example: {
+        header: ["cardTitle"],
+        footer: ["cardMeta"],
+        elevation: { $theme: "elevation.md" },
+        backgroundColor: { $theme: "color.surface" },
+        borderColor: { $theme: "color.border" },
+        borderRadius: { $theme: "radius.lg" },
+      },
+    },
+    Table: {
+      props: tablePropsSchema,
+      slots: [],
+      description:
+        "Header row + data rows. `header` styles a distinct column row; `rows` is an array of cell arrays or { cells }. `striped` zebra-stripes body rows. Colors take `$theme` refs.",
+      example: {
+        header: ["Service", "Status", "Uptime"],
+        rows: [
+          ["API", "Operational", "99.98%"],
+          ["Database", "Operational", "99.95%"],
+        ],
+        striped: true,
+        headerBackgroundColor: { $theme: "color.surfaceMuted" },
+        borderColor: { $theme: "color.border" },
+      },
+    },
+    Progress: {
+      props: progressPropsSchema,
+      slots: [],
+      description:
+        "Linear progress bar. Fill width is `value / max` (default 100) clamped 0–100%. Track/fill colors and `height`/`radius` are token-driven; optional `label` with `showValue`.",
+      example: {
+        value: 72,
+        label: "Storage used",
+        showValue: true,
+        trackColor: { $theme: "color.surfaceMuted" },
+        fillColor: { $theme: "color.accent.bg" },
+      },
+    },
   },
 });
 
@@ -171,3 +217,6 @@ export type ListProps = z.infer<typeof listPropsSchema>;
 export type GridProps = z.infer<typeof gridPropsSchema>;
 export type SpacerProps = z.infer<typeof spacerPropsSchema>;
 export type DividerProps = z.infer<typeof dividerPropsSchema>;
+export type CardProps = z.infer<typeof cardPropsSchema>;
+export type TableProps = z.infer<typeof tablePropsSchema>;
+export type ProgressProps = z.infer<typeof progressPropsSchema>;

@@ -13,3 +13,8 @@ export {
 export { gridComponent } from "./layout/grid";
 export { spacerComponent } from "./layout/spacer";
 export { dividerComponent } from "./layout/divider";
+export {
+  cardComponent,
+  tableComponent,
+  progressComponent,
+} from "./composite/index";

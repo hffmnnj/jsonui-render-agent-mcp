@@ -129,6 +129,21 @@ const componentDefaults: Record<string, Record<string, ThemeRef | number>> = {
   Heading: {
     color: { $theme: "color.foreground" },
   },
+  // A bare Divider tracks the theme's border color without the author writing it.
+  Divider: {
+    color: { $theme: "color.border" },
+  },
+  // A bare Card is a raised surface with a themed border and container radius.
+  Card: {
+    backgroundColor: { $theme: "color.surface" },
+    borderColor: { $theme: "color.border" },
+    borderRadius: { $theme: "radius.lg" },
+  },
+  // A bare Progress bar gets a muted track and the accent fill.
+  Progress: {
+    trackColor: { $theme: "color.surfaceMuted" },
+    fillColor: { $theme: "color.accent.bg" },
+  },
 };
 
 function applyDefaults(

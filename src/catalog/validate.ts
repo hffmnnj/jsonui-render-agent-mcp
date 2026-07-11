@@ -3,14 +3,17 @@ import {
   avatarPropsSchema,
   badgePropsSchema,
   boxPropsSchema,
+  cardPropsSchema,
   dividerPropsSchema,
   framePropsSchema,
   gridPropsSchema,
   headingPropsSchema,
   listPropsSchema,
+  progressPropsSchema,
   rowPropsSchema,
   spacerPropsSchema,
   stackPropsSchema,
+  tablePropsSchema,
   textPropsSchema,
 } from "./schema";
 import { catalog } from "./index";
@@ -46,6 +49,9 @@ const componentPropsSchemas = {
   Avatar: avatarPropsSchema,
   Alert: alertPropsSchema,
   List: listPropsSchema,
+  Card: cardPropsSchema,
+  Table: tablePropsSchema,
+  Progress: progressPropsSchema,
 };
 
 type ComponentName = keyof typeof componentPropsSchemas;
