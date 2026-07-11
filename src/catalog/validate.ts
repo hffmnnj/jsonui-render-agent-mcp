@@ -1,12 +1,19 @@
-import { catalog } from "./index";
 import {
+  alertPropsSchema,
+  avatarPropsSchema,
+  badgePropsSchema,
   boxPropsSchema,
+  dividerPropsSchema,
   framePropsSchema,
+  gridPropsSchema,
   headingPropsSchema,
+  listPropsSchema,
   rowPropsSchema,
+  spacerPropsSchema,
   stackPropsSchema,
   textPropsSchema,
 } from "./schema";
+import { catalog } from "./index";
 import type { Spec, UIElement } from "@json-render/core";
 import type { z } from "zod";
 
@@ -32,6 +39,13 @@ const componentPropsSchemas = {
   Row: rowPropsSchema,
   Text: textPropsSchema,
   Heading: headingPropsSchema,
+  Grid: gridPropsSchema,
+  Spacer: spacerPropsSchema,
+  Divider: dividerPropsSchema,
+  Badge: badgePropsSchema,
+  Avatar: avatarPropsSchema,
+  Alert: alertPropsSchema,
+  List: listPropsSchema,
 };
 
 type ComponentName = keyof typeof componentPropsSchemas;

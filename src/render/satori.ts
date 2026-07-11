@@ -42,6 +42,43 @@ function finiteDimension(value: unknown, name: string): number {
   return value;
 }
 
+/** Map a named font weight to Satori's numeric weight, with a fallback. */
+function fontWeightValue(value: unknown, fallback: number): number {
+  switch (value) {
+    case "normal":
+      return 400;
+    case "medium":
+      return 500;
+    case "semibold":
+      return 600;
+    case "bold":
+      return 700;
+    default:
+      return fallback;
+  }
+}
+
+/**
+ * Resolve a List marker style to the glyph placed before each row. `none`
+ * returns null (no marker cell); `number` is 1-based and ordinal-suffixed with
+ * a period; the rest are static bullet glyphs.
+ */
+function listMarkerGlyph(marker: string, index: number): string | null {
+  switch (marker) {
+    case "none":
+      return null;
+    case "dash":
+      return "–";
+    case "check":
+      return "✓";
+    case "number":
+      return `${index + 1}.`;
+    case "disc":
+    default:
+      return "•";
+  }
+}
+
 function renderElement(
   spec: ResolvedSpec,
   key: string,
@@ -198,6 +235,367 @@ function renderElement(
           }),
         },
         requiredText(props, `Heading element "${key}"`)
+      );
+    }
+    case "Grid": {
+      // Satori/Yoga has no CSS grid — emulate equal columns with flex-wrap.
+      // Each child sits in a cell whose basis reserves an equal share of the
+      // row minus the inter-cell gaps, so `columns` per row wrap cleanly.
+      const columns = Math.max(1, Math.trunc((props.columns as number | undefined) ?? 2));
+      const gap = (props.gap as number | undefined) ?? 0;
+      const basis =
+        columns === 1
+          ? "100%"
+          : `calc((100% - ${gap * (columns - 1)}px) / ${columns})`;
+      const cells = children.map((child, index) =>
+        createElement(
+          "div",
+          {
+            key: `${key}-cell-${index}`,
+            style: {
+              display: "flex",
+              flexDirection: "column",
+              flexGrow: 0,
+              flexShrink: 0,
+              flexBasis: basis,
+              maxWidth: basis,
+            },
+          },
+          child
+        )
+      );
+      return createElement(
+        "div",
+        {
+          key,
+          style: cleanStyle({
+            display: "flex",
+            flexDirection: "row",
+            flexWrap: "wrap",
+            gap,
+            alignItems: props.alignItems as CSSProperties["alignItems"],
+            justifyContent: props.justifyContent as CSSProperties["justifyContent"],
+            padding: props.padding as CSSProperties["padding"],
+            flex: props.flex as CSSProperties["flex"],
+          }),
+        },
+        cells
+      );
+    }
+    case "Spacer": {
+      const grow = props.grow === true;
+      const size = props.size as number | undefined;
+      return createElement("div", {
+        key,
+        style: cleanStyle({
+          display: "flex",
+          flex: grow ? 1 : undefined,
+          flexShrink: grow ? undefined : 0,
+          width: grow ? undefined : size,
+          height: grow ? undefined : size,
+        }),
+      });
+    }
+    case "Divider": {
+      const orientation = (props.orientation as string | undefined) ?? "horizontal";
+      const thickness = (props.thickness as number | undefined) ?? 1;
+      const length = (props.length as CSSProperties["width"]) ?? "100%";
+      // A theme-resolved spec supplies a literal color; fall back to a neutral
+      // hairline only when a bare Divider omits it entirely.
+      const color = (props.color as string | undefined) ?? "#e4e4e7";
+      const isHorizontal = orientation !== "vertical";
+      return createElement("div", {
+        key,
+        style: cleanStyle({
+          display: "flex",
+          flexShrink: 0,
+          backgroundColor: color,
+          margin: props.margin as CSSProperties["margin"],
+          width: isHorizontal ? length : thickness,
+          height: isHorizontal ? thickness : length,
+        }),
+      });
+    }
+    case "Badge": {
+      // Inline pill. Theme-resolved specs supply literal colors via $theme refs
+      // keyed on the chosen variant; neutral fallbacks keep a bare Badge legible.
+      const label = requiredText(props, `Badge element "${key}"`);
+      const text = props.uppercase ? label.toUpperCase() : label;
+      return createElement(
+        "div",
+        {
+          key,
+          style: cleanStyle({
+            display: "flex",
+            alignItems: "center",
+            alignSelf: "flex-start",
+            fontFamily: FONT_FAMILY,
+            fontSize: (props.fontSize as number | undefined) ?? 12,
+            fontWeight: fontWeightValue(props.fontWeight, 600),
+            color: (props.color as string | undefined) ?? "#3f3f46",
+            backgroundColor: (props.backgroundColor as string | undefined) ?? "#f4f4f5",
+            borderColor: props.borderColor as string | undefined,
+            borderWidth: props.borderWidth as CSSProperties["borderWidth"],
+            borderStyle: props.borderWidth ? "solid" : undefined,
+            borderRadius: (props.borderRadius as number | undefined) ?? 9999,
+            paddingTop: (props.paddingY as number | undefined) ?? 2,
+            paddingBottom: (props.paddingY as number | undefined) ?? 2,
+            paddingLeft: (props.paddingX as number | undefined) ?? 10,
+            paddingRight: (props.paddingX as number | undefined) ?? 10,
+            letterSpacing: (props.letterSpacing as CSSProperties["letterSpacing"]) ??
+              (props.uppercase ? "0.05em" : undefined),
+            lineHeight: 1,
+          }),
+        },
+        text
+      );
+    }
+    case "Avatar": {
+      const size = (props.size as number | undefined) ?? 40;
+      const shape = (props.shape as string | undefined) ?? "circle";
+      const borderRadius =
+        shape === "square" ? 0 : shape === "rounded" ? Math.round(size * 0.22) : 9999;
+      const src = props.src as string | undefined;
+      // Image mode only works with a locally-embeddable base64 data: URI —
+      // remote URLs would require a network fetch at render time (banned). Any
+      // other value falls back to the always-available initials disc.
+      const useImage =
+        props.mode === "image" && typeof src === "string" && src.startsWith("data:");
+      const baseStyle: CSSProperties = {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+        width: size,
+        height: size,
+        borderRadius,
+        overflow: "hidden",
+        borderColor: props.borderColor as string | undefined,
+        borderWidth: props.borderWidth as CSSProperties["borderWidth"],
+        borderStyle: props.borderWidth ? "solid" : undefined,
+      };
+
+      if (useImage) {
+        return createElement(
+          "div",
+          { key, style: cleanStyle(baseStyle) },
+          createElement("img", {
+            src,
+            width: size,
+            height: size,
+            style: { width: size, height: size, objectFit: "cover" },
+          })
+        );
+      }
+
+      const initials = ((props.initials as string | undefined) ?? "").slice(0, 3);
+      return createElement(
+        "div",
+        {
+          key,
+          style: cleanStyle({
+            ...baseStyle,
+            backgroundColor: (props.backgroundColor as string | undefined) ?? "#4f46e5",
+            color: (props.color as string | undefined) ?? "#ffffff",
+            fontFamily: FONT_FAMILY,
+            fontSize: (props.fontSize as number | undefined) ?? Math.round(size * 0.4),
+            fontWeight: fontWeightValue(props.fontWeight, 600),
+            letterSpacing: "0.02em",
+          }),
+        },
+        initials
+      );
+    }
+    case "Alert": {
+      const body = requiredText(props, `Alert element "${key}"`);
+      const title = props.title as string | undefined;
+      const padding = (props.padding as number | undefined) ?? 16;
+      const gap = (props.gap as number | undefined) ?? 4;
+      const bg = (props.backgroundColor as string | undefined) ?? "#f4f4f5";
+      const border = (props.borderColor as string | undefined) ?? "#e4e4e7";
+      const titleColor = (props.titleColor as string | undefined) ?? "#18181b";
+      const bodyColor = (props.color as string | undefined) ?? "#52525b";
+      const showAccentBar = props.showAccentBar !== false;
+      const accentColor = (props.accentColor as string | undefined) ?? border;
+
+      const contentChildren: ReactNode[] = [];
+      if (title) {
+        contentChildren.push(
+          createElement(
+            "div",
+            {
+              key: `${key}__title`,
+              style: cleanStyle({
+                display: "flex",
+                fontFamily: FONT_FAMILY,
+                fontSize: 15,
+                fontWeight: 600,
+                color: titleColor,
+                lineHeight: 1.3,
+              }),
+            },
+            title
+          )
+        );
+      }
+      contentChildren.push(
+        createElement(
+          "div",
+          {
+            key: `${key}__body`,
+            style: cleanStyle({
+              display: "flex",
+              fontFamily: FONT_FAMILY,
+              fontSize: 14,
+              color: bodyColor,
+              lineHeight: 1.5,
+            }),
+          },
+          body
+        )
+      );
+
+      const inner = createElement(
+        "div",
+        {
+          key: `${key}__content`,
+          style: cleanStyle({
+            display: "flex",
+            flexDirection: "column",
+            gap,
+            flex: 1,
+          }),
+        },
+        contentChildren
+      );
+
+      const children: ReactNode[] = showAccentBar
+        ? [
+            createElement("div", {
+              key: `${key}__bar`,
+              style: cleanStyle({
+                display: "flex",
+                flexShrink: 0,
+                width: 3,
+                alignSelf: "stretch",
+                backgroundColor: accentColor,
+                borderRadius: 9999,
+              }),
+            }),
+            inner,
+          ]
+        : [inner];
+
+      return createElement(
+        "div",
+        {
+          key,
+          style: cleanStyle({
+            display: "flex",
+            flexDirection: "row",
+            gap: showAccentBar ? 12 : 0,
+            padding,
+            backgroundColor: bg,
+            borderColor: border,
+            borderWidth: (props.borderWidth as number | undefined) ?? 1,
+            borderStyle: "solid",
+            borderRadius: (props.borderRadius as number | undefined) ?? 8,
+          }),
+        },
+        children
+      );
+    }
+    case "List": {
+      const items = Array.isArray(props.items) ? (props.items as unknown[]) : [];
+      const marker = (props.marker as string | undefined) ?? "disc";
+      const gap = (props.gap as number | undefined) ?? 6;
+      const fontSize = (props.fontSize as number | undefined) ?? 15;
+      const color = (props.color as string | undefined) ?? "#18181b";
+      const secondaryColor = (props.secondaryColor as string | undefined) ?? "#71717a";
+      const markerColor = (props.markerColor as string | undefined) ?? color;
+      const lineHeight = (props.lineHeight as number | undefined) ?? 1.5;
+
+      const rows = items.map((item, index) => {
+        const isRecord = typeof item === "object" && item !== null;
+        const primary = isRecord
+          ? String((item as { text?: unknown }).text ?? "")
+          : String(item);
+        const secondary = isRecord
+          ? ((item as { secondary?: unknown }).secondary as string | undefined)
+          : undefined;
+        const glyph = listMarkerGlyph(marker, index);
+
+        const rowChildren: ReactNode[] = [];
+        if (glyph !== null) {
+          rowChildren.push(
+            createElement(
+              "div",
+              {
+                key: `${key}__m${index}`,
+                style: cleanStyle({
+                  display: "flex",
+                  flexShrink: 0,
+                  fontFamily: FONT_FAMILY,
+                  fontSize,
+                  lineHeight,
+                  color: markerColor,
+                  width: marker === "number" ? undefined : 16,
+                  fontWeight: marker === "check" ? 700 : 400,
+                }),
+              },
+              glyph
+            )
+          );
+        }
+        rowChildren.push(
+          createElement(
+            "div",
+            {
+              key: `${key}__t${index}`,
+              style: cleanStyle({
+                display: "flex",
+                flexDirection: "row",
+                flex: 1,
+                justifyContent: secondary ? "space-between" : "flex-start",
+                fontFamily: FONT_FAMILY,
+                fontSize,
+                lineHeight,
+                color,
+              }),
+            },
+            secondary
+              ? [
+                  createElement("div", { key: `${key}__t${index}a`, style: { display: "flex" } }, primary),
+                  createElement(
+                    "div",
+                    {
+                      key: `${key}__t${index}b`,
+                      style: cleanStyle({ display: "flex", color: secondaryColor }),
+                    },
+                    secondary
+                  ),
+                ]
+              : primary
+          )
+        );
+
+        return createElement(
+          "div",
+          {
+            key: `${key}__row${index}`,
+            style: cleanStyle({ display: "flex", flexDirection: "row", gap: 8, alignItems: "flex-start" }),
+          },
+          rowChildren
+        );
+      });
+
+      return createElement(
+        "div",
+        {
+          key,
+          style: cleanStyle({ display: "flex", flexDirection: "column", gap }),
+        },
+        rows
       );
     }
     default:

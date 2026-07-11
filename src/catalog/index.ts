@@ -2,10 +2,17 @@ import { schema as imageSchema } from "@json-render/image";
 import { defineCatalog } from "@json-render/core";
 import { z } from "zod";
 import {
+  alertPropsSchema,
+  avatarPropsSchema,
+  badgePropsSchema,
   boxPropsSchema,
+  dividerPropsSchema,
   framePropsSchema,
+  gridPropsSchema,
   headingPropsSchema,
+  listPropsSchema,
   rowPropsSchema,
+  spacerPropsSchema,
   stackPropsSchema,
   textPropsSchema,
 } from "./schema";
@@ -75,6 +82,77 @@ export const catalog = defineCatalog(schema, {
       description: "Heading text at various levels. h1 is largest, h4 is smallest.",
       example: { text: "Hello World", level: "h1", color: "#000000" },
     },
+    Badge: {
+      props: badgePropsSchema,
+      slots: [],
+      description:
+        "Small inline pill label for statuses and tags. Set `variant` and supply matching `$theme` color refs (e.g. color.success.bg / .fg).",
+      example: {
+        text: "Active",
+        variant: "success",
+        backgroundColor: { $theme: "color.success.bg" },
+        color: { $theme: "color.success.fg" },
+      },
+    },
+    Avatar: {
+      props: avatarPropsSchema,
+      slots: [],
+      description:
+        "Circular identity marker. `mode: \"initials\"` (default) draws initials on a tinted disc; `mode: \"image\"` needs a base64 data: URI in `src` (remote URLs are not fetched).",
+      example: {
+        mode: "initials",
+        initials: "JH",
+        size: 48,
+        backgroundColor: { $theme: "color.accent.bg" },
+        color: { $theme: "color.accent.fg" },
+      },
+    },
+    Alert: {
+      props: alertPropsSchema,
+      slots: [],
+      description:
+        "Bordered, tinted callout with optional title and required body text. Set `variant` and supply matching `$theme` refs (color.<status>.subtle / .border / .bg).",
+      example: {
+        title: "Heads up",
+        text: "Your storage is almost full.",
+        variant: "warning",
+        backgroundColor: { $theme: "color.warning.subtle" },
+        borderColor: { $theme: "color.warning.border" },
+        titleColor: { $theme: "color.warning.bg" },
+      },
+    },
+    List: {
+      props: listPropsSchema,
+      slots: [],
+      description:
+        "Vertical list of string or { text, secondary } items with a selectable marker (none/disc/dash/check/number).",
+      example: {
+        marker: "check",
+        gap: 8,
+        items: ["Backups enabled", { text: "2FA", secondary: "Recommended" }],
+      },
+    },
+    Grid: {
+      props: gridPropsSchema,
+      slots: ["default"],
+      description:
+        "Equal-column grid layout (flex-wrap based). Children flow into `columns` equal-width cells per row, wrapping to new rows, separated by `gap`.",
+      example: { columns: 3, gap: 16 },
+    },
+    Spacer: {
+      props: spacerPropsSchema,
+      slots: [],
+      description:
+        "Empty sizing element. Fixed `size` (px) holds a gap; `grow: true` (flex: 1) absorbs remaining space.",
+      example: { size: 24 },
+    },
+    Divider: {
+      props: dividerPropsSchema,
+      slots: [],
+      description:
+        "Thin separator line. `orientation` picks the axis; pass a `$theme.color.*` color to track the theme.",
+      example: { orientation: "horizontal", color: { $theme: "color.border" } },
+    },
   },
 });
 
@@ -86,3 +164,10 @@ export type StackProps = z.infer<typeof stackPropsSchema>;
 export type RowProps = z.infer<typeof rowPropsSchema>;
 export type TextProps = z.infer<typeof textPropsSchema>;
 export type HeadingProps = z.infer<typeof headingPropsSchema>;
+export type BadgeProps = z.infer<typeof badgePropsSchema>;
+export type AvatarProps = z.infer<typeof avatarPropsSchema>;
+export type AlertProps = z.infer<typeof alertPropsSchema>;
+export type ListProps = z.infer<typeof listPropsSchema>;
+export type GridProps = z.infer<typeof gridPropsSchema>;
+export type SpacerProps = z.infer<typeof spacerPropsSchema>;
+export type DividerProps = z.infer<typeof dividerPropsSchema>;
