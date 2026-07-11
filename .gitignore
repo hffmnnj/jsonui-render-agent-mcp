@@ -3,13 +3,25 @@
 
 # Dependencies
 node_modules/
+jspm_packages/
+bower_components/
 bun.lock.bak
+package-json.lock
+node_modules.bun
 
 # Build output
 dist/
 build/
+build/Release
 .svelte-kit/
+.next/
+.nuxt/
+.vuepress/dist
+.serverless/
+.fusebox/
+.dynamodb/
 *.tsbuildinfo
+typings/
 
 # Env / secrets
 .env
@@ -22,7 +34,44 @@ build/
 .vscode/
 .idea/
 
-# Runtime artifacts
+# Logs
+logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+*.pid
+*.seed
+*.pid.lock
+pids
+
+# Databases
+*.sqlite
+
+# Coverage / diagnostics
+coverage
+*.lcov
+.nyc_output
+.eslintcache
+lib-cov
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+.tern-port
+
+# Misc caches
+.cache
+.cache/
+.grunt
+.npm
+.node_repl_history
+.lock-wscript
+*.tgz
+.yarn-integrity
+
+# Runtime artifacts (rendered images)
 renders/
 *.png
 !**/static/**/*.png
