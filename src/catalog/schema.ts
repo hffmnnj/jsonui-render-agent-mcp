@@ -385,3 +385,228 @@ export const progressPropsSchema = z.object({
   width: z.union([z.number(), z.string()]).nullable().optional(),
 });
 export type ProgressProps = z.infer<typeof progressPropsSchema>;
+
+/* ------------------------------------------------------------------ *
+ * Radial charts (Wave 4, Task 4.2): PieChart/Donut, ProgressRing.     *
+ *                                                                     *
+ * These are hand-authored inline-SVG components (arc `path` + `circle`)*
+ * rendered inside Satori's flexbox layout — no canvas charting lib.   *
+ * Slice/segment colors cycle the palette's categorical `color.chart`  *
+ * ramp: an author passes `colors: { $theme: "color.chart" }`, which   *
+ * the theme pass resolves to the literal string[] ramp for the theme. *
+ * Any label text is drawn as a normal Satori <div> overlay, never an  *
+ * SVG <text> node (Satori rejects those in this version).             *
+ * ------------------------------------------------------------------ */
+
+/**
+ * A palette ramp prop — an ordered array of literal color strings a chart cycles
+ * through and wraps. Supplied either inline or, preferably, as a single `$theme`
+ * ref to `color.chart` (which resolves to the whole ramp array).
+ */
+const colorRamp = z.union([z.array(z.string()), z.object({ $theme: z.string() })]);
+
+/** One pie/donut data point: a numeric `value` with an optional `label`. */
+const pieSlice = z.object({
+  label: z.string().nullable().optional(),
+  value: z.number(),
+  /** Optional explicit color override for this slice (else the ramp is used). */
+  color: colorValue.nullable().optional(),
+});
+
+/**
+ * PieChart — a proportional pie or donut. `data` is the required series; each
+ * slice's angle is its `value` share of the total. `innerRadius` > 0 (or the
+ * `donut` shorthand) cuts a center hole to make a donut. Slice fills cycle the
+ * `colors` ramp (pass `{ $theme: "color.chart" }`). A single 100% slice renders
+ * as a solid disc/ring (the full-circle arc case is handled, not degenerate).
+ * `centerLabel`/`centerValue` place text in a donut's hole.
+ */
+export const pieChartPropsSchema = z.object({
+  data: z.array(pieSlice).min(1),
+  /** Overall square size of the chart in px. Defaults to 200. */
+  size: z.number().positive().nullable().optional(),
+  /** Inner hole radius in px. 0 = full pie; > 0 = donut. */
+  innerRadius: z.number().nonnegative().nullable().optional(),
+  /** Shorthand: `true` makes a donut with a sensible default hole. */
+  donut: z.boolean().nullable().optional(),
+  /** Categorical fill ramp; cycles + wraps across slices. */
+  colors: colorRamp.nullable().optional(),
+  /** Gap (px) drawn between slices as a stroke in the background color. */
+  padAngle: z.number().nonnegative().nullable().optional(),
+  /** Background color painted behind slice gaps (usually the surface token). */
+  backgroundColor: colorValue.nullable().optional(),
+  /** Big value shown centered inside a donut hole. */
+  centerLabel: z.string().nullable().optional(),
+  /** Small caption under `centerLabel`. */
+  centerValue: z.string().nullable().optional(),
+  centerLabelColor: colorValue.nullable().optional(),
+  centerValueColor: colorValue.nullable().optional(),
+});
+export type PieChartProps = z.infer<typeof pieChartPropsSchema>;
+
+/**
+ * ProgressRing — a circular progress indicator (a.k.a. gauge). A full track
+ * `circle` plus a partial arc `path` filled to `value / max` (clamped 0–100%).
+ * Renders correctly at the extremes: 0% draws only the track (no degenerate
+ * zero-length arc), 100% draws a complete ring (the full-circle case is split
+ * into two arcs, not a broken single arc). An optional centered `label` /
+ * `sublabel` reads the value.
+ */
+export const progressRingPropsSchema = z.object({
+  value: z.number(),
+  /** Denominator for the fill ratio. Defaults to 100. */
+  max: z.number().positive().nullable().optional(),
+  /** Overall square size in px. Defaults to 160. */
+  size: z.number().positive().nullable().optional(),
+  /** Ring stroke thickness in px. Defaults to a proportion of `size`. */
+  thickness: z.number().positive().nullable().optional(),
+  /** Track (unfilled) ring color. Use a `$theme.color.*` ref. */
+  trackColor: colorValue.nullable().optional(),
+  /** Progress arc color. Use a `$theme.color.*` ref. */
+  fillColor: colorValue.nullable().optional(),
+  /** Round the ends of the progress arc. Defaults to true. */
+  rounded: z.boolean().nullable().optional(),
+  /** Clock-degree angle the fill starts at (0 = top). Defaults to 0. */
+  startAngle: z.number().nullable().optional(),
+  /** Big centered readout (e.g. the percentage). */
+  label: z.string().nullable().optional(),
+  /** When true and no `label` given, auto-shows the computed percentage. */
+  showValue: z.boolean().nullable().optional(),
+  /** Small caption under the label. */
+  sublabel: z.string().nullable().optional(),
+  labelColor: colorValue.nullable().optional(),
+  sublabelColor: colorValue.nullable().optional(),
+});
+export type ProgressRingProps = z.infer<typeof progressRingPropsSchema>;
+
+/* ------------------------------------------------------------------ *
+ * Axis / series charts (Wave 4, Task 4.1): BarChart, LineChart,       *
+ * Sparkline.                                                          *
+ *                                                                     *
+ * Hand-authored inline-SVG charts (rect / polyline / path / line /    *
+ * circle) rendered inside Satori's flexbox layout — no canvas lib.    *
+ * Series/bar colors cycle the palette's categorical `color.chart`     *
+ * ramp: pass `colors: { $theme: "color.chart" }` (shared `colorRamp`  *
+ * above) and the theme pass resolves it to the literal ramp array.    *
+ * Satori rejects SVG <text>, so axis/value LABELS are drawn as Satori *
+ * <div> overlays around the plot, never as SVG text nodes.            *
+ * ------------------------------------------------------------------ */
+
+/**
+ * One data point on an axis chart. Either a bare number, or a
+ * `{ label?, value }` object so bars/points can carry an x-axis label. Mixed
+ * arrays are allowed (a labelled point next to a bare number).
+ */
+const seriesPoint = z.union([
+  z.number(),
+  z.object({
+    value: z.number(),
+    label: z.string().nullable().optional(),
+  }),
+]);
+
+/**
+ * BarChart — a vertical bar chart for a single categorical series. `data` is
+ * the required array of `{ label, value }` (or bare numbers); each bar's height
+ * encodes its value against a zero-anchored axis. Bar fills cycle the `colors`
+ * ramp (pass `{ $theme: "color.chart" }`) unless a single `barColor` is given.
+ * `showGrid`/`showAxisLabels`/`showValueLabels` toggle the gridlines, the
+ * per-bar x labels, and the Y-axis tick labels — all drawn as div overlays.
+ */
+export const barChartPropsSchema = z.object({
+  data: z.array(seriesPoint).min(1),
+  /** Overall chart width in px. Defaults to 360. */
+  width: z.number().positive().nullable().optional(),
+  /** Overall chart height in px. Defaults to 200. */
+  height: z.number().positive().nullable().optional(),
+  /** Categorical bar-fill ramp; cycles + wraps across bars. */
+  colors: colorRamp.nullable().optional(),
+  /** Single fill for every bar (overrides the ramp when set). */
+  barColor: colorValue.nullable().optional(),
+  /** Fraction of each band the bar occupies (0–1). Defaults to 0.62. */
+  barRatio: z.number().positive().max(1).nullable().optional(),
+  /** Bar corner radius in px. Defaults to a small crisp round. */
+  barRadius: z.number().nonnegative().nullable().optional(),
+  /** Draw horizontal gridlines at the Y ticks. Defaults to true. */
+  showGrid: z.boolean().nullable().optional(),
+  /** Draw the per-bar x-axis labels (needs `{ label }` data). Defaults to true. */
+  showAxisLabels: z.boolean().nullable().optional(),
+  /** Draw the Y-axis tick labels. Defaults to true. */
+  showValueLabels: z.boolean().nullable().optional(),
+  gridColor: colorValue.nullable().optional(),
+  axisColor: colorValue.nullable().optional(),
+  labelColor: colorValue.nullable().optional(),
+});
+export type BarChartProps = z.infer<typeof barChartPropsSchema>;
+
+/**
+ * LineChart — one or more line series over a shared axis. `series` is an array
+ * of `{ name?, data }` (each `data` a numeric/`{value}` series); a single-series
+ * shorthand `data` is also accepted. Lines cycle the `colors` ramp per series,
+ * optionally rendered `smooth` (Bézier) with points and a subtle filled `area`.
+ * Gridlines, Y-tick labels, and x labels are div overlays (Satori-safe).
+ */
+export const lineSeries = z.object({
+  name: z.string().nullable().optional(),
+  data: z.array(seriesPoint).min(1),
+  /** Optional explicit color for this series (else the ramp is used). */
+  color: colorValue.nullable().optional(),
+});
+
+export const lineChartPropsSchema = z
+  .object({
+    /** Multi-series input. Provide this OR the single-series `data` shorthand. */
+    series: z.array(lineSeries).min(1).nullable().optional(),
+    /** Single-series shorthand (wrapped into one unnamed series). */
+    data: z.array(seriesPoint).min(1).nullable().optional(),
+    width: z.number().positive().nullable().optional(),
+    height: z.number().positive().nullable().optional(),
+    colors: colorRamp.nullable().optional(),
+    /** Line stroke width in px. Defaults to 2. */
+    strokeWidth: z.number().positive().nullable().optional(),
+    /** Curve the lines with a Bézier smoothing. Defaults to false. */
+    smooth: z.boolean().nullable().optional(),
+    /** Draw a dot at each data point. Defaults to false. */
+    showPoints: z.boolean().nullable().optional(),
+    /** Fill a subtle area under a single line. Ignored for multi-series. */
+    showArea: z.boolean().nullable().optional(),
+    /** X labels taken from the first series' `{ label }` values. */
+    axisLabels: z.array(z.string()).nullable().optional(),
+    showGrid: z.boolean().nullable().optional(),
+    showAxisLabels: z.boolean().nullable().optional(),
+    showValueLabels: z.boolean().nullable().optional(),
+    gridColor: colorValue.nullable().optional(),
+    axisColor: colorValue.nullable().optional(),
+    labelColor: colorValue.nullable().optional(),
+  })
+  .refine((v) => (v.series && v.series.length > 0) || (v.data && v.data.length > 0), {
+    message: "LineChart requires either `series` or `data`.",
+    path: ["series"],
+  });
+export type LineChartProps = z.infer<typeof lineChartPropsSchema>;
+
+/**
+ * Sparkline — a compact, axis-less mini line for inline use (e.g. beside a
+ * Metric value). Just the trend line (optional `smooth`, `area`, end `dot`);
+ * no gridlines, axes, or labels. Tightly fits its data (no forced zero baseline)
+ * so the SHAPE of the trend reads at small sizes.
+ */
+export const sparklinePropsSchema = z.object({
+  data: z.array(seriesPoint).min(2),
+  /** Width in px. Defaults to 120. */
+  width: z.number().positive().nullable().optional(),
+  /** Height in px. Defaults to 32. */
+  height: z.number().positive().nullable().optional(),
+  /** Line color. Use a `$theme.color.*` ref. Defaults to the accent. */
+  color: colorValue.nullable().optional(),
+  strokeWidth: z.number().positive().nullable().optional(),
+  smooth: z.boolean().nullable().optional(),
+  /** Fill a translucent area under the line. Defaults to true. */
+  showArea: z.boolean().nullable().optional(),
+  /** Fill color for the area (else a faded form of the line color). */
+  areaColor: colorValue.nullable().optional(),
+  /** Draw a dot at the final point. Defaults to true. */
+  showEndDot: z.boolean().nullable().optional(),
+  endDotColor: colorValue.nullable().optional(),
+});
+export type SparklineProps = z.infer<typeof sparklinePropsSchema>;

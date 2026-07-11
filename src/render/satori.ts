@@ -2,6 +2,30 @@ import { readFile } from "node:fs/promises";
 import type { CSSProperties, ReactNode } from "react";
 import { createElement } from "react";
 import satori, { type SatoriOptions } from "satori";
+import {
+  arcPath,
+  clamp,
+  computeSlices,
+  slicePath,
+  type SliceDatum,
+} from "../catalog/components/charts/arc-helpers";
+import {
+  areaPath,
+  axisTicks,
+  barRects,
+  domainFromValues,
+  entryLabel,
+  entryValue,
+  formatTick,
+  linearScale,
+  plotBox,
+  pointsToAttr,
+  rampColor,
+  round,
+  seriesPoints,
+  smoothPath,
+  type Point,
+} from "../catalog/components/charts/svg-helpers";
 import type { ResolvedSpec } from "./resolve-theme";
 
 const FONT_FAMILY = "FreeSans";
@@ -77,6 +101,106 @@ function listMarkerGlyph(marker: string, index: number): string | null {
     default:
       return "•";
   }
+}
+
+/* ------------------------------------------------------------------ *
+ * Axis/series chart helpers (BarChart, LineChart, Sparkline).         *
+ *                                                                     *
+ * These build an inline <svg> of shape-only geometry (rect/polyline/  *
+ * path/line/circle) plus flexbox <div> LABEL overlays — Satori throws *
+ * on SVG <text>, so every label is a positioned div, never a text     *
+ * node. Colors arrive already theme-resolved (literal hex / a literal *
+ * ramp array from `color.chart`), so these helpers never see $theme.  *
+ * ------------------------------------------------------------------ */
+
+/** Fallback categorical ramp if a chart omits `colors` entirely (matches the
+ *  light palette's `color.chart`; a spec normally passes a resolved ramp). */
+const DEFAULT_CHART_RAMP = ["#4f46e5", "#16a34a", "#d97706", "#dc2626", "#0891b2", "#9333ea"];
+
+/** Coerce a resolved `colors` prop into a literal ramp array. */
+function resolveRamp(colors: unknown): string[] {
+  return Array.isArray(colors) && colors.length > 0 ? (colors as string[]) : DEFAULT_CHART_RAMP;
+}
+
+/** Pull the numeric values out of a `(number | { value, label })[]` series. */
+function seriesValues(data: unknown): number[] {
+  return Array.isArray(data) ? data.map((d) => entryValue(d)) : [];
+}
+
+/** Pull the optional per-point labels out of a series (undefined where absent). */
+function seriesLabels(data: unknown): Array<string | undefined> {
+  return Array.isArray(data) ? data.map((d) => entryLabel(d)) : [];
+}
+
+/** A row of evenly-spaced x-axis category labels under a plot band. */
+function bandAxisLabels(
+  key: string,
+  labels: Array<string | undefined>,
+  color: string,
+  fontSize: number
+): ReactNode {
+  return createElement(
+    "div",
+    {
+      key: `${key}__xlabels`,
+      style: cleanStyle({ display: "flex", flexDirection: "row", width: "100%" }),
+    },
+    labels.map((label, index) =>
+      createElement(
+        "div",
+        {
+          key: `${key}__xl${index}`,
+          style: cleanStyle({
+            display: "flex",
+            flex: 1,
+            justifyContent: "center",
+            fontFamily: FONT_FAMILY,
+            fontSize,
+            color,
+            lineHeight: 1,
+          }),
+        },
+        label ?? ""
+      )
+    )
+  );
+}
+
+/**
+ * The Y-axis tick labels, absolutely positioned against the plot's left gutter
+ * so each sits vertically aligned with its gridline. Returns one positioned div
+ * per tick (the caller places them inside a relatively-positioned plot column).
+ */
+function valueTickLabels(
+  key: string,
+  ticks: Array<{ value: number; position: number }>,
+  color: string,
+  fontSize: number,
+  gutter: number
+): ReactNode[] {
+  return ticks.map((tick, index) =>
+    createElement(
+      "div",
+      {
+        key: `${key}__yl${index}`,
+        style: cleanStyle({
+          display: "flex",
+          position: "absolute",
+          left: 0,
+          top: round(tick.position - fontSize / 2),
+          width: gutter - 6,
+          height: fontSize,
+          justifyContent: "flex-end",
+          alignItems: "center",
+          fontFamily: FONT_FAMILY,
+          fontSize,
+          color,
+          lineHeight: 1,
+        }),
+      },
+      formatTick(tick.value)
+    )
+  );
 }
 
 function renderElement(
@@ -928,6 +1052,675 @@ function renderElement(
           }),
         },
         [caption, bar]
+      );
+    }
+    case "PieChart": {
+      // Hand-authored SVG pie/donut. Slices are filled arc `path`s inside an
+      // <svg>; any center/label text is a normal Satori <div> overlaid on top
+      // (Satori rejects SVG <text> nodes, so we never emit them). Slice colors
+      // cycle the resolved `color.chart` ramp; a per-slice `color` overrides it.
+      const size = (props.size as number | undefined) ?? 200;
+      const rawData = Array.isArray(props.data) ? (props.data as unknown[]) : [];
+      const data: SliceDatum[] = rawData.map((d) => {
+        const rec = (typeof d === "object" && d !== null ? d : {}) as Record<string, unknown>;
+        return {
+          label: typeof rec.label === "string" ? rec.label : undefined,
+          value: typeof rec.value === "number" ? rec.value : 0,
+        };
+      });
+
+      const ramp = Array.isArray(props.colors)
+        ? (props.colors as string[])
+        : ["#4f46e5", "#16a34a", "#d97706", "#dc2626", "#0891b2", "#9333ea"];
+      const perSliceColor = rawData.map((d) =>
+        typeof d === "object" && d !== null
+          ? ((d as { color?: unknown }).color as string | undefined)
+          : undefined
+      );
+
+      const center = { x: size / 2, y: size / 2 };
+      const outerRadius = size / 2;
+      const donut = props.donut === true || (props.innerRadius as number | undefined) !== undefined;
+      const innerRadius = donut
+        ? Math.min(
+            outerRadius - 1,
+            (props.innerRadius as number | undefined) ?? Math.round(outerRadius * 0.6)
+          )
+        : 0;
+
+      const bg = (props.backgroundColor as string | undefined) ?? "transparent";
+      // A gap between slices, drawn as a background-colored stroke on each path.
+      const padStroke = (props.padAngle as number | undefined) ?? 0;
+
+      const slices = computeSlices(data);
+      const slicePaths: ReactNode[] = [];
+      slices.forEach((slice) => {
+        if (slice.fraction <= 0) return; // skip zero-value slices, don't crash
+        const d = slicePath(center, outerRadius, innerRadius, slice.startAngle, slice.endAngle);
+        if (!d) return;
+        const fill =
+          perSliceColor[slice.index] ?? ramp[slice.index % Math.max(1, ramp.length)] ?? "#4f46e5";
+        slicePaths.push(
+          createElement("path", {
+            key: `${key}__slice${slice.index}`,
+            d,
+            fill,
+            stroke: padStroke > 0 ? bg : undefined,
+            strokeWidth: padStroke > 0 ? padStroke : undefined,
+          })
+        );
+      });
+
+      const svg = createElement(
+        "svg",
+        { key: `${key}__svg`, width: size, height: size, viewBox: `0 0 ${size} ${size}` },
+        slicePaths
+      );
+
+      // Optional center text (typically for a donut). Overlaid absolutely so the
+      // SVG stays a clean vector and the text uses the real font metrics.
+      const overlay: ReactNode[] = [];
+      const centerLabel = props.centerLabel as string | undefined;
+      const centerValue = props.centerValue as string | undefined;
+      if (centerLabel || centerValue) {
+        const labelNodes: ReactNode[] = [];
+        if (centerLabel) {
+          labelNodes.push(
+            createElement(
+              "div",
+              {
+                key: `${key}__cl`,
+                style: cleanStyle({
+                  display: "flex",
+                  fontFamily: FONT_FAMILY,
+                  fontSize: Math.round(size * 0.16),
+                  fontWeight: 700,
+                  color: (props.centerLabelColor as string | undefined) ?? "#18181b",
+                  lineHeight: 1,
+                }),
+              },
+              centerLabel
+            )
+          );
+        }
+        if (centerValue) {
+          labelNodes.push(
+            createElement(
+              "div",
+              {
+                key: `${key}__cv`,
+                style: cleanStyle({
+                  display: "flex",
+                  fontFamily: FONT_FAMILY,
+                  fontSize: Math.round(size * 0.075),
+                  color: (props.centerValueColor as string | undefined) ?? "#52525b",
+                  lineHeight: 1,
+                  marginTop: 4,
+                }),
+              },
+              centerValue
+            )
+          );
+        }
+        overlay.push(
+          createElement(
+            "div",
+            {
+              key: `${key}__center`,
+              style: cleanStyle({
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: size,
+                height: size,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+              }),
+            },
+            labelNodes
+          )
+        );
+      }
+
+      return createElement(
+        "div",
+        {
+          key,
+          style: cleanStyle({
+            display: "flex",
+            position: "relative",
+            width: size,
+            height: size,
+            flexShrink: 0,
+          }),
+        },
+        [svg, ...overlay]
+      );
+    }
+    case "ProgressRing": {
+      // Circular gauge: a full track `circle` plus a partial progress arc
+      // `path`. 0% draws no arc (track only), 100% draws a complete ring (the
+      // arc helper splits a 360° sweep so it isn't a degenerate zero-length
+      // arc). Center readout is an overlaid Satori <div>, never an SVG <text>.
+      const size = (props.size as number | undefined) ?? 160;
+      const rawValue = typeof props.value === "number" ? props.value : 0;
+      const max = (props.max as number | undefined) ?? 100;
+      const ratio = max > 0 ? clamp(rawValue / max, 0, 1) : 0;
+      const pct = Math.round(ratio * 100);
+
+      const thickness = (props.thickness as number | undefined) ?? Math.max(6, Math.round(size * 0.1));
+      const radius = size / 2 - thickness / 2;
+      const center = { x: size / 2, y: size / 2 };
+      const startAngle = (props.startAngle as number | undefined) ?? 0;
+      const track = (props.trackColor as string | undefined) ?? "#f4f4f5";
+      const fill = (props.fillColor as string | undefined) ?? "#4f46e5";
+      const rounded = props.rounded !== false;
+
+      const svgChildren: ReactNode[] = [
+        createElement("circle", {
+          key: `${key}__track`,
+          cx: center.x,
+          cy: center.y,
+          r: radius,
+          fill: "none",
+          stroke: track,
+          strokeWidth: thickness,
+        }),
+      ];
+
+      // Progress arc — only when there is something to draw (ratio > 0). At
+      // ratio === 1 the helper emits a split full-circle arc so it renders.
+      if (ratio > 0) {
+        const d = arcPath(center, radius, startAngle, startAngle + ratio * 360);
+        if (d) {
+          svgChildren.push(
+            createElement("path", {
+              key: `${key}__fill`,
+              d,
+              fill: "none",
+              stroke: fill,
+              strokeWidth: thickness,
+              strokeLinecap: rounded ? "round" : "butt",
+            })
+          );
+        }
+      }
+
+      const svg = createElement(
+        "svg",
+        { key: `${key}__svg`, width: size, height: size, viewBox: `0 0 ${size} ${size}` },
+        svgChildren
+      );
+
+      const labelText =
+        (props.label as string | undefined) ?? (props.showValue === true ? `${pct}%` : undefined);
+      const sublabel = props.sublabel as string | undefined;
+
+      const overlay: ReactNode[] = [];
+      if (labelText || sublabel) {
+        const labelNodes: ReactNode[] = [];
+        if (labelText) {
+          labelNodes.push(
+            createElement(
+              "div",
+              {
+                key: `${key}__lbl`,
+                style: cleanStyle({
+                  display: "flex",
+                  fontFamily: FONT_FAMILY,
+                  fontSize: Math.round(size * 0.2),
+                  fontWeight: 700,
+                  color: (props.labelColor as string | undefined) ?? "#18181b",
+                  lineHeight: 1,
+                }),
+              },
+              labelText
+            )
+          );
+        }
+        if (sublabel) {
+          labelNodes.push(
+            createElement(
+              "div",
+              {
+                key: `${key}__sub`,
+                style: cleanStyle({
+                  display: "flex",
+                  fontFamily: FONT_FAMILY,
+                  fontSize: Math.round(size * 0.09),
+                  color: (props.sublabelColor as string | undefined) ?? "#52525b",
+                  lineHeight: 1,
+                  marginTop: 4,
+                }),
+              },
+              sublabel
+            )
+          );
+        }
+        overlay.push(
+          createElement(
+            "div",
+            {
+              key: `${key}__center`,
+              style: cleanStyle({
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: size,
+                height: size,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+              }),
+            },
+            labelNodes
+          )
+        );
+      }
+
+      return createElement(
+        "div",
+        {
+          key,
+          style: cleanStyle({
+            display: "flex",
+            position: "relative",
+            width: size,
+            height: size,
+            flexShrink: 0,
+          }),
+        },
+        [svg, ...overlay]
+      );
+    }
+    case "BarChart": {
+      // Vertical bars in an inline <svg>; gridlines are thin <line>s, bars are
+      // rounded <rect>s cycling the resolved chart ramp. Axis + value labels are
+      // div overlays (Satori has no SVG <text>), stacked around the plot.
+      const width = (props.width as number | undefined) ?? 360;
+      const height = (props.height as number | undefined) ?? 200;
+      const values = seriesValues(props.data);
+      const labels = seriesLabels(props.data);
+      const ramp = resolveRamp(props.colors);
+      const barColor = props.barColor as string | undefined;
+      const showGrid = props.showGrid !== false;
+      const showAxisLabels = props.showAxisLabels !== false && labels.some((l) => l);
+      const showValueLabels = props.showValueLabels !== false;
+      const gridColor = (props.gridColor as string | undefined) ?? "#e4e4e7";
+      const labelColor = (props.labelColor as string | undefined) ?? "#71717a";
+      const barRadius = (props.barRadius as number | undefined) ?? 3;
+      const labelFont = 11;
+
+      // Reserve a left gutter for Y labels and a bottom strip for X labels.
+      const leftGutter = showValueLabels ? 34 : 0;
+      const bottomStrip = showAxisLabels ? labelFont + 8 : 0;
+      const svgWidth = width - leftGutter;
+      const svgHeight = height - bottomStrip;
+      const domain = domainFromValues(values, { zeroBaseline: true });
+      const plot = plotBox(svgWidth, svgHeight, { top: 6, right: 4, bottom: 4, left: 2 });
+      const ticks = axisTicks(domain, plot, 4);
+
+      const svgChildren: ReactNode[] = [];
+      if (showGrid) {
+        ticks.forEach((tick, i) =>
+          svgChildren.push(
+            createElement("line", {
+              key: `${key}__grid${i}`,
+              x1: plot.x,
+              y1: tick.position,
+              x2: plot.x + plot.width,
+              y2: tick.position,
+              stroke: gridColor,
+              strokeWidth: 1,
+            })
+          )
+        );
+      }
+      barRects(values, domain, plot, { barRatio: (props.barRatio as number | undefined) ?? 0.62 }).forEach(
+        (r) =>
+          svgChildren.push(
+            createElement("rect", {
+              key: `${key}__bar${r.index}`,
+              x: r.x,
+              y: r.y,
+              width: r.width,
+              height: r.height,
+              rx: Math.min(barRadius, r.width / 2),
+              fill: barColor ?? rampColor(ramp, r.index),
+            })
+          )
+      );
+
+      const svg = createElement(
+        "svg",
+        { key: `${key}__svg`, width: svgWidth, height: svgHeight, viewBox: `0 0 ${svgWidth} ${svgHeight}` },
+        svgChildren
+      );
+
+      // Plot row: [Y labels gutter][svg]. Y labels are absolute over the gutter.
+      const plotRow = createElement(
+        "div",
+        {
+          key: `${key}__plotrow`,
+          style: cleanStyle({ display: "flex", flexDirection: "row", width, height: svgHeight }),
+        },
+        [
+          leftGutter > 0
+            ? createElement(
+                "div",
+                {
+                  key: `${key}__ygutter`,
+                  style: cleanStyle({
+                    display: "flex",
+                    position: "relative",
+                    width: leftGutter,
+                    height: svgHeight,
+                  }),
+                },
+                valueTickLabels(key, ticks, labelColor, labelFont, leftGutter)
+              )
+            : null,
+          createElement("div", { key: `${key}__svgwrap`, style: { display: "flex" } }, svg),
+        ]
+      );
+
+      const rows: ReactNode[] = [plotRow];
+      if (showAxisLabels) {
+        rows.push(
+          createElement(
+            "div",
+            {
+              key: `${key}__xrow`,
+              style: cleanStyle({ display: "flex", flexDirection: "row", width, marginTop: 6 }),
+            },
+            [
+              leftGutter > 0
+                ? createElement("div", { key: `${key}__xspace`, style: { display: "flex", width: leftGutter } })
+                : null,
+              createElement(
+                "div",
+                { key: `${key}__xwrap`, style: cleanStyle({ display: "flex", width: svgWidth }) },
+                bandAxisLabels(key, labels, labelColor, labelFont)
+              ),
+            ]
+          )
+        );
+      }
+
+      return createElement(
+        "div",
+        {
+          key,
+          style: cleanStyle({ display: "flex", flexDirection: "column", width, flexShrink: 0 }),
+        },
+        rows
+      );
+    }
+    case "LineChart": {
+      // One or more polylines/paths in an inline <svg> over a shared axis, with
+      // optional gridlines, points, and a single-series area fill. All labels
+      // are div overlays. Points align edge-to-edge across the plot width.
+      const width = (props.width as number | undefined) ?? 420;
+      const height = (props.height as number | undefined) ?? 220;
+
+      // Normalize to a list of { data, color? } series (accept the `data`
+      // single-series shorthand). Colors already resolved to literals.
+      const rawSeries = Array.isArray(props.series)
+        ? (props.series as Array<Record<string, unknown>>)
+        : Array.isArray(props.data)
+          ? [{ data: props.data }]
+          : [];
+      const ramp = resolveRamp(props.colors);
+      const strokeWidth = (props.strokeWidth as number | undefined) ?? 2;
+      const smooth = props.smooth === true;
+      const showPoints = props.showPoints === true;
+      const showArea = props.showArea === true && rawSeries.length === 1;
+      const showGrid = props.showGrid !== false;
+      const showValueLabels = props.showValueLabels !== false;
+      const gridColor = (props.gridColor as string | undefined) ?? "#e4e4e7";
+      const labelColor = (props.labelColor as string | undefined) ?? "#71717a";
+      const labelFont = 11;
+
+      const axisLabels = Array.isArray(props.axisLabels)
+        ? (props.axisLabels as string[])
+        : seriesLabels(rawSeries[0]?.data).map((l) => l ?? "");
+      const hasAxisLabels = props.showAxisLabels !== false && axisLabels.some((l) => l);
+
+      const leftGutter = showValueLabels ? 34 : 0;
+      const bottomStrip = hasAxisLabels ? labelFont + 8 : 0;
+      const svgWidth = width - leftGutter;
+      const svgHeight = height - bottomStrip;
+
+      // Domain spans every series so lines share one honest scale.
+      const allValues = rawSeries.flatMap((s) => seriesValues(s.data));
+      const domain = domainFromValues(allValues, { zeroBaseline: false });
+      const plot = plotBox(svgWidth, svgHeight, { top: 8, right: 8, bottom: 6, left: 4 });
+      const ticks = axisTicks(domain, plot, 4);
+      const baselineY = linearScale(domain, { start: plot.y + plot.height, end: plot.y })(
+        domain.min <= 0 && domain.max >= 0 ? 0 : domain.min
+      );
+
+      const svgChildren: ReactNode[] = [];
+      if (showGrid) {
+        ticks.forEach((tick, i) =>
+          svgChildren.push(
+            createElement("line", {
+              key: `${key}__grid${i}`,
+              x1: plot.x,
+              y1: tick.position,
+              x2: plot.x + plot.width,
+              y2: tick.position,
+              stroke: gridColor,
+              strokeWidth: 1,
+            })
+          )
+        );
+      }
+
+      rawSeries.forEach((series, si) => {
+        const values = seriesValues(series.data);
+        const points: Point[] = seriesPoints(values, domain, plot, { bandCenter: false });
+        if (points.length === 0) return;
+        const color = (series.color as string | undefined) ?? rampColor(ramp, si);
+
+        if (showArea) {
+          svgChildren.push(
+            createElement("path", {
+              key: `${key}__area${si}`,
+              d: areaPath(points, round(baselineY), smooth),
+              fill: color,
+              fillOpacity: 0.12,
+              stroke: "none",
+            })
+          );
+        }
+
+        svgChildren.push(
+          smooth
+            ? createElement("path", {
+                key: `${key}__line${si}`,
+                d: smoothPath(points),
+                fill: "none",
+                stroke: color,
+                strokeWidth,
+                strokeLinejoin: "round",
+                strokeLinecap: "round",
+              })
+            : createElement("polyline", {
+                key: `${key}__line${si}`,
+                points: pointsToAttr(points),
+                fill: "none",
+                stroke: color,
+                strokeWidth,
+                strokeLinejoin: "round",
+                strokeLinecap: "round",
+              })
+        );
+
+        if (showPoints) {
+          points.forEach((p, pi) =>
+            svgChildren.push(
+              createElement("circle", {
+                key: `${key}__pt${si}_${pi}`,
+                cx: p.x,
+                cy: p.y,
+                r: strokeWidth + 1,
+                fill: color,
+              })
+            )
+          );
+        }
+      });
+
+      const svg = createElement(
+        "svg",
+        { key: `${key}__svg`, width: svgWidth, height: svgHeight, viewBox: `0 0 ${svgWidth} ${svgHeight}` },
+        svgChildren
+      );
+
+      const plotRow = createElement(
+        "div",
+        {
+          key: `${key}__plotrow`,
+          style: cleanStyle({ display: "flex", flexDirection: "row", width, height: svgHeight }),
+        },
+        [
+          leftGutter > 0
+            ? createElement(
+                "div",
+                {
+                  key: `${key}__ygutter`,
+                  style: cleanStyle({
+                    display: "flex",
+                    position: "relative",
+                    width: leftGutter,
+                    height: svgHeight,
+                  }),
+                },
+                valueTickLabels(key, ticks, labelColor, labelFont, leftGutter)
+              )
+            : null,
+          createElement("div", { key: `${key}__svgwrap`, style: { display: "flex" } }, svg),
+        ]
+      );
+
+      const rows: ReactNode[] = [plotRow];
+      if (hasAxisLabels) {
+        rows.push(
+          createElement(
+            "div",
+            {
+              key: `${key}__xrow`,
+              style: cleanStyle({ display: "flex", flexDirection: "row", width, marginTop: 6 }),
+            },
+            [
+              leftGutter > 0
+                ? createElement("div", { key: `${key}__xspace`, style: { display: "flex", width: leftGutter } })
+                : null,
+              createElement(
+                "div",
+                { key: `${key}__xwrap`, style: cleanStyle({ display: "flex", width: svgWidth }) },
+                bandAxisLabels(key, axisLabels, labelColor, labelFont)
+              ),
+            ]
+          )
+        );
+      }
+
+      return createElement(
+        "div",
+        {
+          key,
+          style: cleanStyle({ display: "flex", flexDirection: "column", width, flexShrink: 0 }),
+        },
+        rows
+      );
+    }
+    case "Sparkline": {
+      // A bare, axis-less trend line for inline use. No gridlines/labels; just a
+      // tightly-fitted polyline/path, optional area fill, and an end dot. Fits
+      // its data (no forced zero) so the shape reads at small sizes.
+      const width = (props.width as number | undefined) ?? 120;
+      const height = (props.height as number | undefined) ?? 32;
+      const values = seriesValues(props.data);
+      const color = (props.color as string | undefined) ?? "#4f46e5";
+      const strokeWidth = (props.strokeWidth as number | undefined) ?? 2;
+      const smooth = props.smooth === true;
+      const showArea = props.showArea !== false;
+      const showEndDot = props.showEndDot !== false;
+      const areaColor = (props.areaColor as string | undefined) ?? color;
+      const endDotColor = (props.endDotColor as string | undefined) ?? color;
+
+      const domain = domainFromValues(values, { zeroBaseline: false });
+      // Inset by the stroke/dot radius so the line never clips at the edges.
+      const inset = Math.max(strokeWidth, showEndDot ? strokeWidth + 2 : strokeWidth);
+      const plot = plotBox(width, height, { top: inset, right: inset, bottom: inset, left: inset });
+      const points: Point[] = seriesPoints(values, domain, plot, { bandCenter: false });
+
+      const svgChildren: ReactNode[] = [];
+      if (points.length > 0) {
+        if (showArea) {
+          svgChildren.push(
+            createElement("path", {
+              key: `${key}__area`,
+              d: areaPath(points, plot.y + plot.height, smooth),
+              fill: areaColor,
+              fillOpacity: 0.15,
+              stroke: "none",
+            })
+          );
+        }
+        svgChildren.push(
+          smooth
+            ? createElement("path", {
+                key: `${key}__line`,
+                d: smoothPath(points),
+                fill: "none",
+                stroke: color,
+                strokeWidth,
+                strokeLinejoin: "round",
+                strokeLinecap: "round",
+              })
+            : createElement("polyline", {
+                key: `${key}__line`,
+                points: pointsToAttr(points),
+                fill: "none",
+                stroke: color,
+                strokeWidth,
+                strokeLinejoin: "round",
+                strokeLinecap: "round",
+              })
+        );
+        if (showEndDot) {
+          const last = points[points.length - 1];
+          svgChildren.push(
+            createElement("circle", {
+              key: `${key}__enddot`,
+              cx: last.x,
+              cy: last.y,
+              r: strokeWidth + 1,
+              fill: endDotColor,
+            })
+          );
+        }
+      }
+
+      const svg = createElement(
+        "svg",
+        { key: `${key}__svg`, width, height, viewBox: `0 0 ${width} ${height}` },
+        svgChildren
+      );
+
+      return createElement(
+        "div",
+        {
+          key,
+          style: cleanStyle({ display: "flex", width, height, flexShrink: 0 }),
+        },
+        svg
       );
     }
     default:

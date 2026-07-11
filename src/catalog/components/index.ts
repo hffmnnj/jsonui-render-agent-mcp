@@ -18,3 +18,10 @@ export {
   tableComponent,
   progressComponent,
 } from "./composite/index";
+export {
+  pieChartComponent,
+  progressRingComponent,
+  barChartComponent,
+  lineChartComponent,
+  sparklineComponent,
+} from "./charts/index";

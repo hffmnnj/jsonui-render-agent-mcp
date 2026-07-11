@@ -5,16 +5,21 @@ import {
   alertPropsSchema,
   avatarPropsSchema,
   badgePropsSchema,
+  barChartPropsSchema,
   boxPropsSchema,
   cardPropsSchema,
   dividerPropsSchema,
   framePropsSchema,
   gridPropsSchema,
   headingPropsSchema,
+  lineChartPropsSchema,
   listPropsSchema,
+  pieChartPropsSchema,
   progressPropsSchema,
+  progressRingPropsSchema,
   rowPropsSchema,
   spacerPropsSchema,
+  sparklinePropsSchema,
   stackPropsSchema,
   tablePropsSchema,
   textPropsSchema,
@@ -199,6 +204,84 @@ export const catalog = defineCatalog(schema, {
         fillColor: { $theme: "color.accent.bg" },
       },
     },
+    PieChart: {
+      props: pieChartPropsSchema,
+      slots: [],
+      description:
+        "Proportional pie/donut chart from a `data` series of `{ label, value }`. Each slice's angle is its share of the total; `donut: true` (or `innerRadius`) cuts a center hole. Slice fills cycle the categorical ramp — pass `colors: { $theme: \"color.chart\" }`. A single 100% slice renders as a solid disc/ring.",
+      example: {
+        data: [
+          { label: "Compute", value: 45 },
+          { label: "Storage", value: 30 },
+          { label: "Network", value: 25 },
+        ],
+        donut: true,
+        colors: { $theme: "color.chart" },
+        backgroundColor: { $theme: "color.surface" },
+      },
+    },
+    ProgressRing: {
+      props: progressRingPropsSchema,
+      slots: [],
+      description:
+        "Circular progress indicator / gauge. A track ring plus an arc filled to `value / max` (clamped 0–100%); renders correctly at 0%, 50%, and 100%. Track/fill colors are token-driven; optional centered `label`/`showValue` and `sublabel`.",
+      example: {
+        value: 72,
+        label: "72%",
+        sublabel: "Uptime",
+        trackColor: { $theme: "color.surfaceMuted" },
+        fillColor: { $theme: "color.accent.bg" },
+      },
+    },
+    BarChart: {
+      props: barChartPropsSchema,
+      slots: [],
+      description:
+        "Vertical bar chart for a single categorical series of `{ label, value }` (or bare numbers). Zero-anchored bars whose fills cycle the categorical ramp — pass `colors: { $theme: \"color.chart\" }` — or a single `barColor`. Optional gridlines, x-axis labels, and Y tick labels are token-driven div overlays.",
+      example: {
+        data: [
+          { label: "Mon", value: 42 },
+          { label: "Tue", value: 58 },
+          { label: "Wed", value: 35 },
+          { label: "Thu", value: 71 },
+          { label: "Fri", value: 64 },
+        ],
+        colors: { $theme: "color.chart" },
+        gridColor: { $theme: "color.border" },
+        labelColor: { $theme: "color.mutedForeground" },
+      },
+    },
+    LineChart: {
+      props: lineChartPropsSchema,
+      slots: [],
+      description:
+        "One or more line series over a shared axis. Provide `series` (`[{ name?, data }]`) or the single-series `data` shorthand. Lines cycle the ramp per series, optionally `smooth`, with `showPoints` and single-series `showArea`. Gridlines and labels are token-driven div overlays.",
+      example: {
+        series: [
+          { name: "This week", data: [12, 19, 15, 27, 24, 33, 30] },
+          { name: "Last week", data: [10, 14, 13, 18, 20, 22, 21] },
+        ],
+        axisLabels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+        smooth: true,
+        showPoints: true,
+        colors: { $theme: "color.chart" },
+        gridColor: { $theme: "color.border" },
+        labelColor: { $theme: "color.mutedForeground" },
+      },
+    },
+    Sparkline: {
+      props: sparklinePropsSchema,
+      slots: [],
+      description:
+        "Compact, axis-less mini line chart for inline use (e.g. beside a Metric value). Just the trend line with optional `smooth`, translucent `showArea`, and an end `showEndDot`. Tightly fits its data so the trend shape reads small. `color` takes a `$theme.color.*` ref.",
+      example: {
+        data: [4, 6, 5, 8, 7, 11, 9, 13],
+        width: 120,
+        height: 32,
+        color: { $theme: "color.accent.bg" },
+        smooth: true,
+      },
+    },
   },
 });
 
@@ -220,3 +303,8 @@ export type DividerProps = z.infer<typeof dividerPropsSchema>;
 export type CardProps = z.infer<typeof cardPropsSchema>;
 export type TableProps = z.infer<typeof tablePropsSchema>;
 export type ProgressProps = z.infer<typeof progressPropsSchema>;
+export type PieChartProps = z.infer<typeof pieChartPropsSchema>;
+export type ProgressRingProps = z.infer<typeof progressRingPropsSchema>;
+export type BarChartProps = z.infer<typeof barChartPropsSchema>;
+export type LineChartProps = z.infer<typeof lineChartPropsSchema>;
+export type SparklineProps = z.infer<typeof sparklinePropsSchema>;
