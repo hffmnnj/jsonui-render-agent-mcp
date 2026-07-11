@@ -38,6 +38,18 @@ type ToolResponse = {
   isError?: boolean;
 };
 
+type StructuredError = {
+  code: string;
+  path: string;
+  message: string;
+};
+
+function structuredError(result: ToolResponse): StructuredError {
+  expect(result.isError).toBe(true);
+  expect(result.content[0]?.type).toBe("text");
+  return JSON.parse(result.content[0]?.text ?? "") as StructuredError;
+}
+
 async function withClient<T>(callback: (client: Client) => Promise<T>): Promise<T> {
   const transport = new StdioClientTransport({
     command: Bun.which("bun") ?? process.execPath,
@@ -137,10 +149,9 @@ describe("render_ui tool", () => {
         },
       })) as ToolResponse;
 
-      expect(result.isError).toBe(true);
-      expect(result.content[0].type).toBe("text");
-      expect(result.content[0].text).toContain("Validation error");
-      expect(result.content[0].text).toContain(".elements.frame.type");
+      const error = structuredError(result);
+      expect(error.code).toBe("VALIDATION_ERROR");
+      expect(error.path).toBe(".elements.frame.type");
     });
   });
 
@@ -159,10 +170,91 @@ describe("render_ui tool", () => {
         },
       })) as ToolResponse;
 
-      expect(result.isError).toBe(true);
-      expect(result.content[0].type).toBe("text");
-      expect(result.content[0].text).toContain("Validation error");
-      expect(result.content[0].text).toContain(".elements.frame.props");
+      const error = structuredError(result);
+      expect(error.code).toBe("VALIDATION_ERROR");
+      expect(error.path).toContain(".elements.frame.props");
+    });
+  });
+
+  test("returns a structured error for a dangling child reference", async () => {
+    await withClient(async (client) => {
+      const result = (await client.callTool({
+        name: "render_ui",
+        arguments: {
+          spec: {
+            root: "frame",
+            elements: {
+              frame: { type: "Frame", props: { width: 320, height: 180 }, children: ["missing"] },
+            },
+          },
+        },
+      })) as ToolResponse;
+
+      const error = structuredError(result);
+      expect(error).toMatchObject({ code: "VALIDATION_ERROR", path: ".elements.frame.children[0]" });
+      expect(error.message).toContain("does not exist");
+    });
+  });
+
+  test("returns a structured error for a missing root key", async () => {
+    await withClient(async (client) => {
+      const result = (await client.callTool({
+        name: "render_ui",
+        arguments: {
+          spec: {
+            root: "missing",
+            elements: {
+              frame: { type: "Frame", props: { width: 320, height: 180 }, children: [] },
+            },
+          },
+        },
+      })) as ToolResponse;
+
+      const error = structuredError(result);
+      expect(error).toMatchObject({ code: "VALIDATION_ERROR", path: ".root" });
+      expect(error.message).toContain("does not exist");
+    });
+  });
+
+  test("returns a structured error for non-positive Frame dimensions", async () => {
+    await withClient(async (client) => {
+      const result = (await client.callTool({
+        name: "render_ui",
+        arguments: {
+          spec: {
+            root: "frame",
+            elements: {
+              frame: { type: "Frame", props: { width: -320, height: 180 }, children: [] },
+            },
+          },
+        },
+      })) as ToolResponse;
+
+      const error = structuredError(result);
+      expect(error).toMatchObject({ code: "VALIDATION_ERROR", path: ".elements.frame.props.width" });
+      expect(error.message).toContain("finite positive");
+    });
+  });
+
+  test("returns a structured error for cyclic child references", async () => {
+    await withClient(async (client) => {
+      const result = (await client.callTool({
+        name: "render_ui",
+        arguments: {
+          spec: {
+            root: "frame",
+            elements: {
+              frame: { type: "Frame", props: { width: 320, height: 180 }, children: ["a"] },
+              a: { type: "Stack", props: {}, children: ["b"] },
+              b: { type: "Stack", props: {}, children: ["a"] },
+            },
+          },
+        },
+      })) as ToolResponse;
+
+      const error = structuredError(result);
+      expect(error).toMatchObject({ code: "VALIDATION_ERROR", path: ".elements.a" });
+      expect(error.message).toContain("cycle");
     });
   });
 });

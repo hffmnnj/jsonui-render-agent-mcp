@@ -289,9 +289,56 @@ describe("validateSpec", () => {
       if (!result.ok) {
         expect(typeof result.error.path).toBe("string");
         expect(typeof result.error.message).toBe("string");
+        expect(result.error.code).toBe("VALIDATION_ERROR");
         expect(result.error.path.length).toBeGreaterThan(0);
         expect(result.error.message.length).toBeGreaterThan(0);
       }
+    }
+  });
+
+  it("rejects resource-limit violations with a structured error", () => {
+    const result = validateSpec({
+      root: "root",
+      elements: {
+        root: {
+          type: "Frame",
+          props: { width: 400, height: 300 },
+          children: ["text"],
+        },
+        text: {
+          type: "Text",
+          props: { text: "x".repeat(10_001) },
+          children: [],
+        },
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toMatchObject({
+        code: "VALIDATION_ERROR",
+        path: ".elements.text.props.text",
+      });
+      expect(result.error.message).toContain("maximum length");
+    }
+  });
+
+  it("rejects non-finite Frame dimensions with a structured error", () => {
+    const result = validateSpec({
+      root: "root",
+      elements: {
+        root: {
+          type: "Frame",
+          props: { width: Number.POSITIVE_INFINITY, height: 300 },
+          children: [],
+        },
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.path).toBe(".elements.root.props.width");
+      expect(result.error.code).toBe("VALIDATION_ERROR");
     }
   });
 });

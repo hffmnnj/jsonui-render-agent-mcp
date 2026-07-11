@@ -44,16 +44,24 @@ function validationErrorToContent(error: ValidationError["error"]) {
     content: [
       {
         type: "text" as const,
-        text: `Validation error at ${error.path}: ${error.message}`,
+        text: JSON.stringify(error),
       },
     ],
     isError: true as const,
   };
 }
 
-function renderErrorContent(message: string) {
+function renderErrorContent() {
+  // Do not expose renderer internals. Validation handles determinable failures
+  // before rendering; this preserves the same machine-readable error contract
+  // for unexpected render and output failures.
+  const structuredError = {
+    code: "RENDER_ERROR",
+    path: ".",
+    message: "Rendering failed.",
+  };
   return {
-    content: [{ type: "text" as const, text: `Render error: ${message}` }],
+    content: [{ type: "text" as const, text: JSON.stringify(structuredError) }],
     isError: true as const,
   };
 }
@@ -64,7 +72,11 @@ function invalidArgsContent(error: z.ZodError<unknown>) {
     content: [
       {
         type: "text" as const,
-        text: `Invalid tool arguments at .${firstIssue?.path.join(".") ?? ""}: ${firstIssue?.message ?? "Unknown error"}`,
+        text: JSON.stringify({
+          code: "VALIDATION_ERROR",
+          path: `.${firstIssue?.path.join(".") ?? ""}`,
+          message: firstIssue?.message ?? "Invalid tool arguments.",
+        }),
       },
     ],
     isError: true as const,
@@ -115,9 +127,8 @@ export function registerRenderUi(server: McpServer): void {
         const pngBuffer = await renderToPng(resolved, { width, height, scale });
         const { path } = await writeTempPng(pngBuffer);
         return buildImageContent(pngBuffer, path);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return renderErrorContent(message);
+      } catch {
+        return renderErrorContent();
       }
     },
   );
