@@ -8,7 +8,9 @@ Under the hood, specs are validated against a bounded component catalog, resolve
 
 ## Setup
 
-Requires [Bun](https://bun.sh/) >= 1.4.0.
+Requires [Bun](https://bun.sh/) >= 0.8.1.
+
+The floor is driven by `@resvg/resvg-js`, the SVG→PNG rasterizer, which documents Bun support starting at 0.8.1. The server itself uses only standard ESM/Node.js-compatible APIs (`node:fs/promises`, `node:os`, `node:path`, `import.meta.main`, `process.hrtime.bigint`) that are available in that release.
 
 ```bash
 bun install
