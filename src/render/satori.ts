@@ -27,10 +27,9 @@ import {
   type Point,
 } from "../catalog/components/charts/svg-helpers";
 import type { ResolvedSpec } from "./resolve-theme";
+import { DEFAULT_RENDER_HEIGHT, DEFAULT_RENDER_WIDTH } from "./output";
 
 const FONT_FAMILY = "FreeSans";
-const DEFAULT_WIDTH = 1200;
-const DEFAULT_HEIGHT = 630;
 let fontsPromise: Promise<SatoriOptions["fonts"]> | undefined;
 
 export interface RenderOptions {
@@ -2054,11 +2053,17 @@ export async function renderToSvg(
   }
 
   const rootProps = asProps(root.props);
-  const width = finiteDimension(options.width ?? rootProps.width ?? DEFAULT_WIDTH, "Render width");
-  const height = finiteDimension(options.height ?? rootProps.height ?? DEFAULT_HEIGHT, "Render height");
+  const width = finiteDimension(
+    options.width ?? rootProps.width ?? DEFAULT_RENDER_WIDTH,
+    "Render width"
+  );
+  const height = finiteDimension(
+    options.height ?? rootProps.height ?? DEFAULT_RENDER_HEIGHT,
+    "Render height"
+  );
   const tree = renderElement(spec, spec.root, new Set(), width, height);
 
   return satori(tree, { width, height, fonts: await bundledFonts() });
 }
 
-export { DEFAULT_HEIGHT, DEFAULT_WIDTH, FONT_FAMILY };
+export { DEFAULT_RENDER_HEIGHT as DEFAULT_HEIGHT, DEFAULT_RENDER_WIDTH as DEFAULT_WIDTH, FONT_FAMILY };

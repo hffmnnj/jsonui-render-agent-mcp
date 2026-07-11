@@ -13,6 +13,24 @@ const renderInputSchema = z.object({
     .optional()
     .default("light")
     .describe('Visual theme for the render. Either "light" or "dark"; defaults to "light".'),
+  width: z
+    .number()
+    .positive()
+    .finite()
+    .optional()
+    .describe("Override the render width in logical pixels. Defaults to the Frame root width or 1200."),
+  height: z
+    .number()
+    .positive()
+    .finite()
+    .optional()
+    .describe("Override the render height in logical pixels. Defaults to the Frame root height or 630."),
+  scale: z
+    .number()
+    .min(1)
+    .finite()
+    .optional()
+    .describe("PNG density multiplier for crisp output. Defaults to 2."),
 });
 
 const THEME_NAMES: readonly ThemeName[] = ["light", "dark"];
@@ -67,10 +85,15 @@ export function registerRenderUi(server: McpServer): void {
         "Render a JSON UI spec to a PNG image. " +
         "Accepts a structured `spec` and an optional `theme` (\"light\" or \"dark\"). " +
         "Returns a base64 PNG image content block plus a text block with the on-disk temp path. " +
-        "Currently supported catalog components: Frame, Box, Stack, Row, Text, Heading.",
+        "Discover the full component catalog and prop schemas by calling `list_components`. " +
+        "Representative components include Frame, Box, Stack, Row, Text, Heading, " +
+        "Card, Table, Badge, Alert, BarChart, LineChart, PieChart, Sparkline, Metric, and Progress.",
       inputSchema: {
         spec: z.unknown(),
         theme: z.enum(["light", "dark"]).optional().default("light"),
+        width: z.number().positive().optional(),
+        height: z.number().positive().optional(),
+        scale: z.number().min(1).optional(),
       },
     },
     async (args: unknown) => {
@@ -79,7 +102,7 @@ export function registerRenderUi(server: McpServer): void {
         return invalidArgsContent(parsed.error);
       }
 
-      const { spec, theme: themeValue } = parsed.data;
+      const { spec, theme: themeValue, width, height, scale } = parsed.data;
       const theme = isThemeName(themeValue) ? themeValue : "light";
 
       const validation = validateSpec(spec);
@@ -89,7 +112,7 @@ export function registerRenderUi(server: McpServer): void {
 
       try {
         const resolved = resolveTheme(validation.tree, theme);
-        const pngBuffer = await renderToPng(resolved);
+        const pngBuffer = await renderToPng(resolved, { width, height, scale });
         const { path } = await writeTempPng(pngBuffer);
         return buildImageContent(pngBuffer, path);
       } catch (error) {
