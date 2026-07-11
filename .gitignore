@@ -1,0 +1,29 @@
+# GoopSpec workflow state (never commit)
+.goopspec/
+
+# Dependencies
+node_modules/
+bun.lock.bak
+
+# Build output
+dist/
+build/
+.svelte-kit/
+*.tsbuildinfo
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+*.log
+.vscode/
+.idea/
+
+# Runtime artifacts
+renders/
+*.png
+!**/static/**/*.png
+!**/assets/**/*.png
