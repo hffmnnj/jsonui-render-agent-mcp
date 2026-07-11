@@ -323,6 +323,100 @@ describe("validateSpec", () => {
     }
   });
 
+  it("rejects oversized arrays in every untrusted collection shape", () => {
+    const oversized = Array.from({ length: 1_001 }, () => "item");
+    const cases = [
+      {
+        path: ".elements.element.props.items",
+        props: { items: oversized },
+        type: "List",
+      },
+      {
+        path: ".elements.element.props.header",
+        props: { header: oversized, rows: [["value"]] },
+        type: "Table",
+      },
+      {
+        path: ".elements.element.props.rows",
+        props: { rows: Array.from({ length: 1_001 }, () => ["value"]) },
+        type: "Table",
+      },
+      {
+        path: ".elements.element.props.rows[0].cells",
+        props: { rows: [{ cells: oversized }] },
+        type: "Table",
+      },
+      {
+        path: ".elements.frame.children",
+        props: { width: 400, height: 300 },
+        type: "Frame",
+        children: oversized,
+      },
+      {
+        path: ".elements.element.props.header",
+        props: { header: oversized },
+        type: "Card",
+      },
+      {
+        path: ".elements.element.props.footer",
+        props: { footer: oversized },
+        type: "Card",
+      },
+      {
+        path: ".elements.element.props.data",
+        props: { data: Array.from({ length: 1_001 }, () => 1) },
+        type: "BarChart",
+      },
+    ];
+
+    for (const testCase of cases) {
+      const result = validateSpec({
+        root: "frame",
+        elements: {
+          frame: {
+            type: "Frame",
+            props: { width: 400, height: 300 },
+            children: testCase.type === "Frame" ? testCase.children : ["element"],
+          },
+          element: {
+            type: testCase.type,
+            props: testCase.props,
+            children: [],
+          },
+        },
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error).toMatchObject({
+          code: "VALIDATION_ERROR",
+          path: testCase.path,
+        });
+        expect(result.error.message).toContain("maximum length of 1000");
+      }
+    }
+  });
+
+  it("accepts an array at the shared maximum length", () => {
+    const result = validateSpec({
+      root: "frame",
+      elements: {
+        frame: {
+          type: "Frame",
+          props: { width: 400, height: 300 },
+          children: ["list"],
+        },
+        list: {
+          type: "List",
+          props: { items: Array.from({ length: 1_000 }, (_, index) => `Item ${index}`) },
+          children: [],
+        },
+      },
+    });
+
+    expect(result.ok).toBe(true);
+  });
+
   it("rejects non-finite Frame dimensions with a structured error", () => {
     const result = validateSpec({
       root: "root",

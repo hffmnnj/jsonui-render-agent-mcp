@@ -176,6 +176,38 @@ describe("render_ui tool", () => {
     });
   });
 
+  test("rejects an oversized List before rendering", async () => {
+    await withClient(async (client) => {
+      const result = (await client.callTool({
+        name: "render_ui",
+        arguments: {
+          spec: {
+            root: "frame",
+            elements: {
+              frame: {
+                type: "Frame",
+                props: { width: 320, height: 180 },
+                children: ["list"],
+              },
+              list: {
+                type: "List",
+                props: { items: Array.from({ length: 1_001 }, () => "item") },
+                children: [],
+              },
+            },
+          },
+        },
+      })) as ToolResponse;
+
+      const error = structuredError(result);
+      expect(error).toMatchObject({
+        code: "VALIDATION_ERROR",
+        path: ".elements.list.props.items",
+      });
+      expect(error.message).toContain("maximum length of 1000");
+    });
+  });
+
   test("returns a structured error for a dangling child reference", async () => {
     await withClient(async (client) => {
       const result = (await client.callTool({

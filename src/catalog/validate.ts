@@ -134,6 +134,10 @@ const LIMITS = {
   maxTreeDepth: 50,
   maxStringLength: 10_000,
   maxChartPoints: 1_000,
+  // All arrays share the chart point ceiling. This covers every collection a
+  // component can accept (including child references and composite props)
+  // without making the renderer's work unbounded.
+  maxArrayLength: 1_000,
 } as const;
 
 type SpecElement = {
@@ -172,6 +176,44 @@ function validateResourceLimits(
         `.elements.${key}.props${chartDataError}`,
         `Chart data exceeds the maximum of ${LIMITS.maxChartPoints} points per series.`
       );
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Validate collection sizes before Zod traverses component props. This is
+ * deliberately iterative: MCP callers supply untrusted JSON, and deeply
+ * nested objects or arrays must not consume the JavaScript call stack.
+ */
+function validateArrayLengths(spec: unknown): ValidationError | undefined {
+  const pending: Array<{ value: unknown; path: string }> = [{ value: spec, path: "" }];
+  const visited = new WeakSet<object>();
+
+  while (pending.length > 0) {
+    const current = pending.pop()!;
+    const value = current.value;
+
+    if (!value || typeof value !== "object") continue;
+    if (visited.has(value)) continue;
+    visited.add(value);
+
+    if (Array.isArray(value)) {
+      if (value.length > LIMITS.maxArrayLength) {
+        return validationError(
+          current.path || ".",
+          `Array exceeds the maximum length of ${LIMITS.maxArrayLength}.`
+        );
+      }
+      for (let index = value.length - 1; index >= 0; index -= 1) {
+        pending.push({ value: value[index], path: `${current.path}[${index}]` });
+      }
+      continue;
+    }
+
+    for (const [key, item] of Object.entries(value)) {
+      pending.push({ value: item, path: `${current.path}.${key}` });
     }
   }
 
@@ -317,6 +359,9 @@ function validateFrameDimensions(
 }
 
 export function validateSpec(spec: unknown): ValidationResult {
+  const arrayLengthError = validateArrayLengths(spec);
+  if (arrayLengthError) return arrayLengthError;
+
   const catalogResult = catalog.validate(spec);
 
   if (!catalogResult.success) {
