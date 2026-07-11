@@ -48,6 +48,14 @@ interface ThemeRef {
   readonly $theme: string;
 }
 
+/**
+ * A value in the `componentDefaults` map. Almost always a `$theme` ref (so the
+ * default honors the active theme and flows through the same resolution logic
+ * that already handles refs resolving to arrays, e.g. `color.chart`). A raw
+ * `number` is allowed for theme-invariant numeric defaults (radius/spacing).
+ */
+type DefaultValue = ThemeRef | number;
+
 function isThemeRef(value: unknown): value is ThemeRef {
   return (
     typeof value === "object" &&
@@ -116,7 +124,7 @@ function resolveValue(
  * resolution logic (and thus honor the active theme) instead of hardcoding
  * literals. Keys are component `type` names; values are prop -> ref maps.
  */
-const componentDefaults: Record<string, Record<string, ThemeRef | number>> = {
+const componentDefaults: Record<string, Record<string, DefaultValue>> = {
   Frame: {
     backgroundColor: { $theme: "color.background" },
   },
@@ -133,16 +141,99 @@ const componentDefaults: Record<string, Record<string, ThemeRef | number>> = {
   Divider: {
     color: { $theme: "color.border" },
   },
+  // A bare Badge is the neutral secondary chip (muted surface + zinc text).
+  Badge: {
+    color: { $theme: "color.neutral.fg" },
+    backgroundColor: { $theme: "color.neutral.bg" },
+  },
+  // A bare Avatar's initials disc uses the brand accent (fill + on-accent text).
+  Avatar: {
+    backgroundColor: { $theme: "color.accent.bg" },
+    color: { $theme: "color.accent.fg" },
+  },
+  // A bare Alert reads as a neutral notice: muted surface, themed border,
+  // primary title over muted body. `accentColor` inherits the border in satori
+  // when omitted, so it needs no separate default here.
+  Alert: {
+    backgroundColor: { $theme: "color.surfaceMuted" },
+    borderColor: { $theme: "color.border" },
+    titleColor: { $theme: "color.foreground" },
+    color: { $theme: "color.mutedForeground" },
+  },
+  // A bare List uses primary text with a muted secondary column. `markerColor`
+  // inherits the primary `color` in satori when omitted.
+  List: {
+    color: { $theme: "color.foreground" },
+    secondaryColor: { $theme: "color.mutedForeground" },
+  },
   // A bare Card is a raised surface with a themed border and container radius.
+  // `dividerColor` inherits `borderColor` in satori when omitted.
   Card: {
     backgroundColor: { $theme: "color.surface" },
     borderColor: { $theme: "color.border" },
     borderRadius: { $theme: "radius.lg" },
   },
-  // A bare Progress bar gets a muted track and the accent fill.
+  // A bare Table: white/background surface, muted header strip, primary header
+  // text over muted body, themed borders, and a faint zebra stripe.
+  Table: {
+    backgroundColor: { $theme: "color.background" },
+    headerBackgroundColor: { $theme: "color.surfaceMuted" },
+    headerColor: { $theme: "color.foreground" },
+    color: { $theme: "color.mutedForeground" },
+    borderColor: { $theme: "color.border" },
+    stripeColor: { $theme: "color.surface" },
+  },
+  // A bare Progress bar gets a muted track, accent fill, and muted caption.
   Progress: {
     trackColor: { $theme: "color.surfaceMuted" },
     fillColor: { $theme: "color.accent.bg" },
+    labelColor: { $theme: "color.mutedForeground" },
+  },
+  // A bare Sparkline trends in the brand accent (line, area tint, and end dot
+  // all inherit `color` in satori when their own props are omitted).
+  Sparkline: {
+    color: { $theme: "color.accent.bg" },
+  },
+  // A bare PieChart cycles the categorical ramp; donut center text uses the
+  // primary/muted foreground pair.
+  PieChart: {
+    colors: { $theme: "color.chart" },
+    centerLabelColor: { $theme: "color.foreground" },
+    centerValueColor: { $theme: "color.mutedForeground" },
+  },
+  // A bare ProgressRing: muted track, accent arc, primary center readout over a
+  // muted sublabel.
+  ProgressRing: {
+    trackColor: { $theme: "color.surfaceMuted" },
+    fillColor: { $theme: "color.accent.bg" },
+    labelColor: { $theme: "color.foreground" },
+    sublabelColor: { $theme: "color.mutedForeground" },
+  },
+  // A bare BarChart: ramp fills, themed gridlines, muted axis labels.
+  BarChart: {
+    colors: { $theme: "color.chart" },
+    gridColor: { $theme: "color.border" },
+    labelColor: { $theme: "color.mutedForeground" },
+  },
+  // A bare LineChart: ramp strokes, themed gridlines, muted axis labels.
+  LineChart: {
+    colors: { $theme: "color.chart" },
+    gridColor: { $theme: "color.border" },
+    labelColor: { $theme: "color.mutedForeground" },
+  },
+  // A bare Metric card: raised surface + themed border, a primary value over a
+  // muted label and subtle caption, with success/danger delta accents.
+  Metric: {
+    backgroundColor: { $theme: "color.surface" },
+    borderColor: { $theme: "color.border" },
+    valueColor: { $theme: "color.foreground" },
+    labelColor: { $theme: "color.mutedForeground" },
+    captionColor: { $theme: "color.subtleForeground" },
+    positiveColor: { $theme: "color.success.bg" },
+    negativeColor: { $theme: "color.danger.bg" },
+    // Resolved accent handed to an embedded sparkline that omits its own color
+    // (the nested `sparkline` object is below componentDefaults' top-level reach).
+    sparklineColor: { $theme: "color.accent.bg" },
   },
 };
 

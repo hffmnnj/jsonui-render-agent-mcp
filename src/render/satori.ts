@@ -112,13 +112,11 @@ function listMarkerGlyph(marker: string, index: number): string | null {
  * ramp array from `color.chart`), so these helpers never see $theme.  *
  * ------------------------------------------------------------------ */
 
-/** Fallback categorical ramp if a chart omits `colors` entirely (matches the
- *  light palette's `color.chart`; a spec normally passes a resolved ramp). */
-const DEFAULT_CHART_RAMP = ["#4f46e5", "#16a34a", "#d97706", "#dc2626", "#0891b2", "#9333ea"];
-
-/** Coerce a resolved `colors` prop into a literal ramp array. */
+/** Coerce a resolved `colors` prop into a literal ramp array. `resolveTheme`'s
+ *  `componentDefaults` fills `colors` with the theme's `color.chart` ramp when a
+ *  chart omits it, so a fully-resolved literal ramp always arrives here. */
 function resolveRamp(colors: unknown): string[] {
-  return Array.isArray(colors) && colors.length > 0 ? (colors as string[]) : DEFAULT_CHART_RAMP;
+  return Array.isArray(colors) ? (colors as string[]) : [];
 }
 
 /** Pull the numeric values out of a `(number | { value, label })[]` series. */
@@ -135,7 +133,7 @@ function seriesLabels(data: unknown): Array<string | undefined> {
 function bandAxisLabels(
   key: string,
   labels: Array<string | undefined>,
-  color: string,
+  color: string | undefined,
   fontSize: number
 ): ReactNode {
   return createElement(
@@ -173,7 +171,7 @@ function bandAxisLabels(
 function valueTickLabels(
   key: string,
   ticks: Array<{ value: number; position: number }>,
-  color: string,
+  color: string | undefined,
   fontSize: number,
   gutter: number
 ): ReactNode[] {
@@ -209,11 +207,11 @@ function valueTickLabels(
  * trend-line geometry — the reuse the blueprint calls for, with zero duplicated
  * plotting math. Colors arrive already theme-resolved to literals.
  */
-function buildSparklineNode(key: string, props: Props): ReactNode {
+function buildSparklineNode(key: string, props: Props, defaultColor: string): ReactNode {
   const width = (props.width as number | undefined) ?? 120;
   const height = (props.height as number | undefined) ?? 32;
   const values = seriesValues(props.data);
-  const color = (props.color as string | undefined) ?? "#4f46e5";
+  const color = (props.color as string | undefined) ?? defaultColor;
   const strokeWidth = (props.strokeWidth as number | undefined) ?? 2;
   const smooth = props.smooth === true;
   const showArea = props.showArea !== false;
@@ -532,9 +530,8 @@ function renderElement(
       const orientation = (props.orientation as string | undefined) ?? "horizontal";
       const thickness = (props.thickness as number | undefined) ?? 1;
       const length = (props.length as CSSProperties["width"]) ?? "100%";
-      // A theme-resolved spec supplies a literal color; fall back to a neutral
-      // hairline only when a bare Divider omits it entirely.
-      const color = (props.color as string | undefined) ?? "#e4e4e7";
+      // resolveTheme's Divider default fills `color` with the theme border.
+      const color = props.color as string | undefined;
       const isHorizontal = orientation !== "vertical";
       return createElement("div", {
         key,
@@ -549,8 +546,8 @@ function renderElement(
       });
     }
     case "Badge": {
-      // Inline pill. Theme-resolved specs supply literal colors via $theme refs
-      // keyed on the chosen variant; neutral fallbacks keep a bare Badge legible.
+      // Inline pill. Colors arrive theme-resolved (resolveTheme's Badge default
+      // supplies the neutral chip pair when a bare Badge omits them).
       const label = requiredText(props, `Badge element "${key}"`);
       const text = props.uppercase ? label.toUpperCase() : label;
       return createElement(
@@ -564,8 +561,8 @@ function renderElement(
             fontFamily: FONT_FAMILY,
             fontSize: (props.fontSize as number | undefined) ?? 12,
             fontWeight: fontWeightValue(props.fontWeight, 600),
-            color: (props.color as string | undefined) ?? "#3f3f46",
-            backgroundColor: (props.backgroundColor as string | undefined) ?? "#f4f4f5",
+            color: props.color as string | undefined,
+            backgroundColor: props.backgroundColor as string | undefined,
             borderColor: props.borderColor as string | undefined,
             borderWidth: props.borderWidth as CSSProperties["borderWidth"],
             borderStyle: props.borderWidth ? "solid" : undefined,
@@ -627,8 +624,8 @@ function renderElement(
           key,
           style: cleanStyle({
             ...baseStyle,
-            backgroundColor: (props.backgroundColor as string | undefined) ?? "#4f46e5",
-            color: (props.color as string | undefined) ?? "#ffffff",
+            backgroundColor: props.backgroundColor as string | undefined,
+            color: props.color as string | undefined,
             fontFamily: FONT_FAMILY,
             fontSize: (props.fontSize as number | undefined) ?? Math.round(size * 0.4),
             fontWeight: fontWeightValue(props.fontWeight, 600),
@@ -643,10 +640,12 @@ function renderElement(
       const title = props.title as string | undefined;
       const padding = (props.padding as number | undefined) ?? 16;
       const gap = (props.gap as number | undefined) ?? 4;
-      const bg = (props.backgroundColor as string | undefined) ?? "#f4f4f5";
-      const border = (props.borderColor as string | undefined) ?? "#e4e4e7";
-      const titleColor = (props.titleColor as string | undefined) ?? "#18181b";
-      const bodyColor = (props.color as string | undefined) ?? "#52525b";
+      // Colors arrive theme-resolved via resolveTheme's Alert defaults; a bare
+      // `accentColor` inherits the (already-resolved) border.
+      const bg = props.backgroundColor as string | undefined;
+      const border = props.borderColor as string | undefined;
+      const titleColor = props.titleColor as string | undefined;
+      const bodyColor = props.color as string | undefined;
       const showAccentBar = props.showAccentBar !== false;
       const accentColor = (props.accentColor as string | undefined) ?? border;
 
@@ -742,8 +741,8 @@ function renderElement(
       const marker = (props.marker as string | undefined) ?? "disc";
       const gap = (props.gap as number | undefined) ?? 6;
       const fontSize = (props.fontSize as number | undefined) ?? 15;
-      const color = (props.color as string | undefined) ?? "#18181b";
-      const secondaryColor = (props.secondaryColor as string | undefined) ?? "#71717a";
+      const color = props.color as string | undefined;
+      const secondaryColor = props.secondaryColor as string | undefined;
       const markerColor = (props.markerColor as string | undefined) ?? color;
       const lineHeight = (props.lineHeight as number | undefined) ?? 1.5;
 
@@ -837,8 +836,8 @@ function renderElement(
       // by a hairline drawn as a bottom/top border rather than an extra element.
       const padding = (props.padding as number | undefined) ?? 20;
       const gap = (props.gap as number | undefined) ?? 12;
-      const bg = (props.backgroundColor as string | undefined) ?? "#fafafa";
-      const border = (props.borderColor as string | undefined) ?? "#e4e4e7";
+      const bg = props.backgroundColor as string | undefined;
+      const border = props.borderColor as string | undefined;
       const dividerColor = (props.dividerColor as string | undefined) ?? border;
       const borderRadius = (props.borderRadius as number | undefined) ?? 8;
       const borderWidth = (props.borderWidth as number | undefined) ?? 1;
@@ -942,12 +941,13 @@ function renderElement(
       const px = (props.cellPaddingX as number | undefined) ?? 12;
       const py = (props.cellPaddingY as number | undefined) ?? 8;
       const fontSize = (props.fontSize as number | undefined) ?? 14;
-      const bg = (props.backgroundColor as string | undefined) ?? "#ffffff";
-      const headerBg = (props.headerBackgroundColor as string | undefined) ?? "#f4f4f5";
-      const headerColor = (props.headerColor as string | undefined) ?? "#18181b";
-      const bodyColor = (props.color as string | undefined) ?? "#52525b";
-      const border = (props.borderColor as string | undefined) ?? "#e4e4e7";
-      const stripe = (props.stripeColor as string | undefined) ?? "#fafafa";
+      // All colors arrive theme-resolved via resolveTheme's Table defaults.
+      const bg = props.backgroundColor as string | undefined;
+      const headerBg = props.headerBackgroundColor as string | undefined;
+      const headerColor = props.headerColor as string | undefined;
+      const bodyColor = props.color as string | undefined;
+      const border = props.borderColor as string | undefined;
+      const stripe = props.stripeColor as string | undefined;
       const borderRadius = (props.borderRadius as number | undefined) ?? 8;
       const borderWidth = (props.borderWidth as number | undefined) ?? 1;
 
@@ -970,7 +970,7 @@ function renderElement(
       const buildCell = (
         cell: unknown,
         cellKey: string,
-        opts: { fontWeight: number; color: string }
+        opts: { fontWeight: number; color: string | undefined }
       ): ReactNode =>
         createElement(
           "div",
@@ -1072,11 +1072,11 @@ function renderElement(
       const pct = Math.max(0, Math.min(100, ratio * 100));
       const height = (props.height as number | undefined) ?? 8;
       const radius = (props.radius as number | undefined) ?? height / 2;
-      const track = (props.trackColor as string | undefined) ?? "#f4f4f5";
-      const fill = (props.fillColor as string | undefined) ?? "#4f46e5";
+      const track = props.trackColor as string | undefined;
+      const fill = props.fillColor as string | undefined;
       const label = props.label as string | undefined;
       const showValue = props.showValue === true;
-      const labelColor = (props.labelColor as string | undefined) ?? "#52525b";
+      const labelColor = props.labelColor as string | undefined;
       const fontSize = (props.fontSize as number | undefined) ?? 13;
 
       const bar = createElement(
@@ -1173,9 +1173,8 @@ function renderElement(
         };
       });
 
-      const ramp = Array.isArray(props.colors)
-        ? (props.colors as string[])
-        : ["#4f46e5", "#16a34a", "#d97706", "#dc2626", "#0891b2", "#9333ea"];
+      // resolveTheme's PieChart default fills `colors` with the theme ramp.
+      const ramp = resolveRamp(props.colors);
       const perSliceColor = rawData.map((d) =>
         typeof d === "object" && d !== null
           ? ((d as { color?: unknown }).color as string | undefined)
@@ -1202,8 +1201,7 @@ function renderElement(
         if (slice.fraction <= 0) return; // skip zero-value slices, don't crash
         const d = slicePath(center, outerRadius, innerRadius, slice.startAngle, slice.endAngle);
         if (!d) return;
-        const fill =
-          perSliceColor[slice.index] ?? ramp[slice.index % Math.max(1, ramp.length)] ?? "#4f46e5";
+        const fill = perSliceColor[slice.index] ?? rampColor(ramp, slice.index);
         slicePaths.push(
           createElement("path", {
             key: `${key}__slice${slice.index}`,
@@ -1239,7 +1237,7 @@ function renderElement(
                   fontFamily: FONT_FAMILY,
                   fontSize: Math.round(size * 0.16),
                   fontWeight: 700,
-                  color: (props.centerLabelColor as string | undefined) ?? "#18181b",
+                  color: props.centerLabelColor as string | undefined,
                   lineHeight: 1,
                 }),
               },
@@ -1257,7 +1255,7 @@ function renderElement(
                   display: "flex",
                   fontFamily: FONT_FAMILY,
                   fontSize: Math.round(size * 0.075),
-                  color: (props.centerValueColor as string | undefined) ?? "#52525b",
+                  color: props.centerValueColor as string | undefined,
                   lineHeight: 1,
                   marginTop: 4,
                 }),
@@ -1318,8 +1316,8 @@ function renderElement(
       const radius = size / 2 - thickness / 2;
       const center = { x: size / 2, y: size / 2 };
       const startAngle = (props.startAngle as number | undefined) ?? 0;
-      const track = (props.trackColor as string | undefined) ?? "#f4f4f5";
-      const fill = (props.fillColor as string | undefined) ?? "#4f46e5";
+      const track = props.trackColor as string | undefined;
+      const fill = props.fillColor as string | undefined;
       const rounded = props.rounded !== false;
 
       const svgChildren: ReactNode[] = [
@@ -1376,7 +1374,7 @@ function renderElement(
                   fontFamily: FONT_FAMILY,
                   fontSize: Math.round(size * 0.2),
                   fontWeight: 700,
-                  color: (props.labelColor as string | undefined) ?? "#18181b",
+                  color: props.labelColor as string | undefined,
                   lineHeight: 1,
                 }),
               },
@@ -1394,7 +1392,7 @@ function renderElement(
                   display: "flex",
                   fontFamily: FONT_FAMILY,
                   fontSize: Math.round(size * 0.09),
-                  color: (props.sublabelColor as string | undefined) ?? "#52525b",
+                  color: props.sublabelColor as string | undefined,
                   lineHeight: 1,
                   marginTop: 4,
                 }),
@@ -1453,8 +1451,8 @@ function renderElement(
       const showGrid = props.showGrid !== false;
       const showAxisLabels = props.showAxisLabels !== false && labels.some((l) => l);
       const showValueLabels = props.showValueLabels !== false;
-      const gridColor = (props.gridColor as string | undefined) ?? "#e4e4e7";
-      const labelColor = (props.labelColor as string | undefined) ?? "#71717a";
+      const gridColor = props.gridColor as string | undefined;
+      const labelColor = props.labelColor as string | undefined;
       const barRadius = (props.barRadius as number | undefined) ?? 3;
       const labelFont = 11;
 
@@ -1584,8 +1582,8 @@ function renderElement(
       const showArea = props.showArea === true && rawSeries.length === 1;
       const showGrid = props.showGrid !== false;
       const showValueLabels = props.showValueLabels !== false;
-      const gridColor = (props.gridColor as string | undefined) ?? "#e4e4e7";
-      const labelColor = (props.labelColor as string | undefined) ?? "#71717a";
+      const gridColor = props.gridColor as string | undefined;
+      const labelColor = props.labelColor as string | undefined;
       const labelFont = 11;
 
       const axisLabels = Array.isArray(props.axisLabels)
@@ -1747,8 +1745,9 @@ function renderElement(
       // A bare, axis-less trend line for inline use. No gridlines/labels; just a
       // tightly-fitted polyline/path, optional area fill, and an end dot. Fits
       // its data (no forced zero) so the shape reads at small sizes. The plotting
-      // is shared with the Metric card via `buildSparklineNode`.
-      return buildSparklineNode(key, props);
+      // is shared with the Metric card via `buildSparklineNode`. `props.color`
+      // is filled by resolveTheme's Sparkline default (accent) when omitted.
+      return buildSparklineNode(key, props, props.color as string);
     case "Metric": {
       // Compact KPI tile: a big value, a label/caption, an optional signed delta
       // chip, and an optional inline Sparkline. Every text run is a flexbox <div>
@@ -1762,14 +1761,14 @@ function renderElement(
       const icon = props.icon as string | undefined;
       const plain = props.plain === true;
 
-      const valueColor = (props.valueColor as string | undefined) ?? "#18181b";
-      const labelColor = (props.labelColor as string | undefined) ?? "#71717a";
-      const captionColor = (props.captionColor as string | undefined) ?? "#a1a1aa";
+      const valueColor = props.valueColor as string | undefined;
+      const labelColor = props.labelColor as string | undefined;
+      const captionColor = props.captionColor as string | undefined;
       const valueFontSize = (props.valueFontSize as number | undefined) ?? 39;
       const labelFontSize = (props.labelFontSize as number | undefined) ?? 13;
       const padding = (props.padding as number | undefined) ?? 20;
-      const positiveColor = (props.positiveColor as string | undefined) ?? "#16a34a";
-      const negativeColor = (props.negativeColor as string | undefined) ?? "#dc2626";
+      const positiveColor = props.positiveColor as string | undefined;
+      const negativeColor = props.negativeColor as string | undefined;
       const neutralColor = (props.neutralColor as string | undefined) ?? labelColor;
 
       // --- Label row: optional icon + label name ---
@@ -1939,7 +1938,7 @@ function renderElement(
       // theme-resolved with the rest of the tree, so colors are already literal.
       const sparkProps = props.sparkline as Props | undefined;
       const sparklineNode = sparkProps
-        ? buildSparklineNode(`${key}__spark`, sparkProps)
+        ? buildSparklineNode(`${key}__spark`, sparkProps, props.sparklineColor as string)
         : null;
       const sparklinePosition = (props.sparklinePosition as string | undefined) ?? "below";
 
@@ -2008,8 +2007,8 @@ function renderElement(
             display: "flex",
             flexDirection: "column",
             padding,
-            backgroundColor: (props.backgroundColor as string | undefined) ?? "#fafafa",
-            borderColor: (props.borderColor as string | undefined) ?? "#e4e4e7",
+            backgroundColor: props.backgroundColor as string | undefined,
+            borderColor: props.borderColor as string | undefined,
             borderWidth: (props.borderWidth as number | undefined) ?? 1,
             borderStyle: "solid",
             borderRadius: (props.borderRadius as number | undefined) ?? 12,
