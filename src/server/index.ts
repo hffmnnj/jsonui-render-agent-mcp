@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { registerTools } from "../tools/index.js";
 
 export const SERVER_INFO = {
   name: "jsonui-render-agent-mcp",
@@ -19,6 +20,10 @@ export type RunningServer = {
  */
 export async function startServer(): Promise<RunningServer> {
   const server = new McpServer(SERVER_INFO);
+
+  /* Register all tools before connecting the transport. */
+  registerTools(server);
+
   const transport = new StdioServerTransport();
 
   await server.connect(transport);
