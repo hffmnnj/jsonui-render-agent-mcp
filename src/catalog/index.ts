@@ -14,6 +14,7 @@ import {
   headingPropsSchema,
   lineChartPropsSchema,
   listPropsSchema,
+  metricPropsSchema,
   pieChartPropsSchema,
   progressPropsSchema,
   progressRingPropsSchema,
@@ -282,6 +283,29 @@ export const catalog = defineCatalog(schema, {
         smooth: true,
       },
     },
+    Metric: {
+      props: metricPropsSchema,
+      slots: [],
+      description:
+        "Compact stat / KPI card: a large hero `value`, a `label`, an optional signed `delta` chip (arrow glyph + success/danger tint driven by the sign or `direction`; set `intent` to invert when down-is-good), and an optional inline `sparkline` reusing the Sparkline component (pass the same props). Surface/border/radius/elevation are token-driven; `plain: true` renders just the stat. All text is Satori div leaves — no SVG text.",
+      example: {
+        label: "Monthly Revenue",
+        value: "$48.2k",
+        caption: "vs. last month",
+        delta: { value: "12.4%", direction: "up" },
+        sparkline: {
+          data: [18, 22, 20, 27, 25, 31, 34, 42],
+          smooth: true,
+          color: { $theme: "color.success.bg" },
+        },
+        positiveColor: { $theme: "color.success.bg" },
+        negativeColor: { $theme: "color.danger.bg" },
+        backgroundColor: { $theme: "color.surface" },
+        borderColor: { $theme: "color.border" },
+        labelColor: { $theme: "color.mutedForeground" },
+        elevation: { $theme: "elevation.sm" },
+      },
+    },
   },
 });
 
@@ -308,3 +332,4 @@ export type ProgressRingProps = z.infer<typeof progressRingPropsSchema>;
 export type BarChartProps = z.infer<typeof barChartPropsSchema>;
 export type LineChartProps = z.infer<typeof lineChartPropsSchema>;
 export type SparklineProps = z.infer<typeof sparklinePropsSchema>;
+export type MetricProps = z.infer<typeof metricPropsSchema>;

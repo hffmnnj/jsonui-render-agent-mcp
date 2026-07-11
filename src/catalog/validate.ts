@@ -11,6 +11,7 @@ import {
   headingPropsSchema,
   lineChartPropsSchema,
   listPropsSchema,
+  metricPropsSchema,
   pieChartPropsSchema,
   progressPropsSchema,
   progressRingPropsSchema,
@@ -60,6 +61,7 @@ const componentPropsSchemas = {
   BarChart: barChartPropsSchema,
   LineChart: lineChartPropsSchema,
   Sparkline: sparklinePropsSchema,
+  Metric: metricPropsSchema,
   PieChart: pieChartPropsSchema,
   ProgressRing: progressRingPropsSchema,
 };

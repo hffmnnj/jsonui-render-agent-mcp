@@ -610,3 +610,83 @@ export const sparklinePropsSchema = z.object({
   endDotColor: colorValue.nullable().optional(),
 });
 export type SparklineProps = z.infer<typeof sparklinePropsSchema>;
+
+/* ------------------------------------------------------------------ *
+ * Metric / stat card (Wave 4, Task 4.3): the flagship "beautiful by   *
+ * default" compact KPI tile.                                          *
+ *                                                                     *
+ * A Metric packs a big `value`, a `label`, an optional signed `delta` *
+ * indicator, and an optional inline Sparkline. Text is rendered as    *
+ * Satori flexbox <div> leaves (never SVG <text>); the Sparkline is    *
+ * reused directly by composing its resolved props into the SAME       *
+ * Sparkline render case — no trend-line logic is reimplemented. Every *
+ * color is a `$theme` ref that resolves to a literal before Satori.   *
+ * ------------------------------------------------------------------ */
+
+/**
+ * A Metric's delta / change indicator. `value` is the display string (already
+ * formatted by the author, e.g. "12.4%" or "1.2k") — a metric that reports its
+ * OWN units shouldn't guess them. `direction` drives the arrow glyph and the
+ * success/danger tint; when omitted it is inferred from a leading sign in
+ * `value`. `intent` lets the author invert the color mapping for metrics where
+ * "down is good" (e.g. error rate, latency): `positive` is always the success
+ * hue and `negative` the danger hue, regardless of the arrow direction.
+ */
+const metricDelta = z.object({
+  value: z.string(),
+  direction: z.enum(["up", "down", "flat"]).nullable().optional(),
+  /** Force the color semantics independent of the arrow. */
+  intent: z.enum(["positive", "negative", "neutral"]).nullable().optional(),
+  /** Explicit color override (else success/danger/muted by intent/direction). */
+  color: colorValue.nullable().optional(),
+  /** Draw the up/down/flat arrow glyph before the value. Defaults to true. */
+  showArrow: z.boolean().nullable().optional(),
+});
+
+/**
+ * Metric — a compact stat / KPI card. `value` is the hero readout (large, bold);
+ * `label` is the metric name/title; optional `caption` adds a secondary line
+ * (e.g. a comparison period). `delta` renders a signed, tinted change chip with
+ * an arrow glyph. `sparkline` embeds an inline trend by reusing the Sparkline
+ * component's exact rendering (pass the same props a standalone Sparkline takes).
+ * Surface, border, radius, padding, and elevation are token-driven, so a bare
+ * Metric is already theme-correct and good-looking; pass `plain: true` to drop
+ * the card surface and render just the stat (for placing inside another Card).
+ */
+export const metricPropsSchema = z.object({
+  value: z.union([z.string(), z.number()]),
+  label: z.string(),
+  /** Optional secondary line under the label (e.g. "vs. last month"). */
+  caption: z.string().nullable().optional(),
+  delta: metricDelta.nullable().optional(),
+  /** Inline trend chart — takes the same props as the Sparkline component. */
+  sparkline: sparklinePropsSchema.nullable().optional(),
+  /** Where the sparkline sits relative to the value block. Defaults to "below". */
+  sparklinePosition: z.enum(["below", "right"]).nullable().optional(),
+  /** Drop the card surface (border/background/padding) — render bare. */
+  plain: z.boolean().nullable().optional(),
+  /** Optional small icon/emoji glyph shown beside the label. */
+  icon: z.string().nullable().optional(),
+
+  // --- token-driven styling (all accept `$theme` refs) ---
+  backgroundColor: colorValue.nullable().optional(),
+  borderColor: colorValue.nullable().optional(),
+  borderWidth: z.number().nullable().optional(),
+  borderRadius: themeableNumber.nullable().optional(),
+  padding: themeableNumber.nullable().optional(),
+  elevation: themeableString.nullable().optional(),
+  valueColor: colorValue.nullable().optional(),
+  labelColor: colorValue.nullable().optional(),
+  captionColor: colorValue.nullable().optional(),
+  /** Success tint for a positive delta. Pass `{ $theme: "color.success.bg" }`. */
+  positiveColor: colorValue.nullable().optional(),
+  /** Danger tint for a negative delta. Pass `{ $theme: "color.danger.bg" }`. */
+  negativeColor: colorValue.nullable().optional(),
+  neutralColor: colorValue.nullable().optional(),
+  /** Hero value font size in px. Defaults to the `display`/h1 scale. */
+  valueFontSize: z.number().positive().nullable().optional(),
+  labelFontSize: z.number().positive().nullable().optional(),
+  width: z.union([z.number(), z.string()]).nullable().optional(),
+  flex: z.number().nullable().optional(),
+});
+export type MetricProps = z.infer<typeof metricPropsSchema>;

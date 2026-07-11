@@ -203,6 +203,111 @@ function valueTickLabels(
   );
 }
 
+/**
+ * Build the inline Sparkline `<div><svg>…</svg></div>` node from a resolved
+ * Sparkline props object. Extracted so BOTH the `Sparkline` render case and the
+ * `Metric` card (which embeds a sparkline beside its value) share the exact same
+ * trend-line geometry — the reuse the blueprint calls for, with zero duplicated
+ * plotting math. Colors arrive already theme-resolved to literals.
+ */
+function buildSparklineNode(key: string, props: Props): ReactNode {
+  const width = (props.width as number | undefined) ?? 120;
+  const height = (props.height as number | undefined) ?? 32;
+  const values = seriesValues(props.data);
+  const color = (props.color as string | undefined) ?? "#4f46e5";
+  const strokeWidth = (props.strokeWidth as number | undefined) ?? 2;
+  const smooth = props.smooth === true;
+  const showArea = props.showArea !== false;
+  const showEndDot = props.showEndDot !== false;
+  const areaColor = (props.areaColor as string | undefined) ?? color;
+  const endDotColor = (props.endDotColor as string | undefined) ?? color;
+
+  const domain = domainFromValues(values, { zeroBaseline: false });
+  // Inset by the stroke/dot radius so the line never clips at the edges.
+  const inset = Math.max(strokeWidth, showEndDot ? strokeWidth + 2 : strokeWidth);
+  const plot = plotBox(width, height, { top: inset, right: inset, bottom: inset, left: inset });
+  const points: Point[] = seriesPoints(values, domain, plot, { bandCenter: false });
+
+  const svgChildren: ReactNode[] = [];
+  if (points.length > 0) {
+    if (showArea) {
+      svgChildren.push(
+        createElement("path", {
+          key: `${key}__area`,
+          d: areaPath(points, plot.y + plot.height, smooth),
+          fill: areaColor,
+          fillOpacity: 0.15,
+          stroke: "none",
+        })
+      );
+    }
+    svgChildren.push(
+      smooth
+        ? createElement("path", {
+            key: `${key}__line`,
+            d: smoothPath(points),
+            fill: "none",
+            stroke: color,
+            strokeWidth,
+            strokeLinejoin: "round",
+            strokeLinecap: "round",
+          })
+        : createElement("polyline", {
+            key: `${key}__line`,
+            points: pointsToAttr(points),
+            fill: "none",
+            stroke: color,
+            strokeWidth,
+            strokeLinejoin: "round",
+            strokeLinecap: "round",
+          })
+    );
+    if (showEndDot) {
+      const last = points[points.length - 1];
+      svgChildren.push(
+        createElement("circle", {
+          key: `${key}__enddot`,
+          cx: last.x,
+          cy: last.y,
+          r: strokeWidth + 1,
+          fill: endDotColor,
+        })
+      );
+    }
+  }
+
+  const svg = createElement(
+    "svg",
+    { key: `${key}__svg`, width, height, viewBox: `0 0 ${width} ${height}` },
+    svgChildren
+  );
+
+  return createElement(
+    "div",
+    {
+      key,
+      style: cleanStyle({ display: "flex", width, height, flexShrink: 0 }),
+    },
+    svg
+  );
+}
+
+/**
+ * The arrow glyph for a delta direction — plain unicode, no icon lib. Uses the
+ * U+2191/2193 arrows (which the bundled FreeSans covers at all weights; the
+ * ▲/▼ triangles are missing from the bold cut and render as tofu).
+ */
+function deltaArrow(direction: string): string {
+  switch (direction) {
+    case "up":
+      return "↑";
+    case "down":
+      return "↓";
+    default:
+      return "→";
+  }
+}
+
 function renderElement(
   spec: ResolvedSpec,
   key: string,
@@ -1639,89 +1744,282 @@ function renderElement(
         rows
       );
     }
-    case "Sparkline": {
+    case "Sparkline":
       // A bare, axis-less trend line for inline use. No gridlines/labels; just a
       // tightly-fitted polyline/path, optional area fill, and an end dot. Fits
-      // its data (no forced zero) so the shape reads at small sizes.
-      const width = (props.width as number | undefined) ?? 120;
-      const height = (props.height as number | undefined) ?? 32;
-      const values = seriesValues(props.data);
-      const color = (props.color as string | undefined) ?? "#4f46e5";
-      const strokeWidth = (props.strokeWidth as number | undefined) ?? 2;
-      const smooth = props.smooth === true;
-      const showArea = props.showArea !== false;
-      const showEndDot = props.showEndDot !== false;
-      const areaColor = (props.areaColor as string | undefined) ?? color;
-      const endDotColor = (props.endDotColor as string | undefined) ?? color;
+      // its data (no forced zero) so the shape reads at small sizes. The plotting
+      // is shared with the Metric card via `buildSparklineNode`.
+      return buildSparklineNode(key, props);
+    case "Metric": {
+      // Compact KPI tile: a big value, a label/caption, an optional signed delta
+      // chip, and an optional inline Sparkline. Every text run is a flexbox <div>
+      // leaf (never SVG <text>); the sparkline reuses the SAME plotting code as
+      // the standalone Sparkline. Colors arrive theme-resolved to literals.
+      const rawValue = props.value;
+      const valueText =
+        typeof rawValue === "number" ? String(rawValue) : String(rawValue ?? "");
+      const label = typeof props.label === "string" ? props.label : "";
+      const caption = props.caption as string | undefined;
+      const icon = props.icon as string | undefined;
+      const plain = props.plain === true;
 
-      const domain = domainFromValues(values, { zeroBaseline: false });
-      // Inset by the stroke/dot radius so the line never clips at the edges.
-      const inset = Math.max(strokeWidth, showEndDot ? strokeWidth + 2 : strokeWidth);
-      const plot = plotBox(width, height, { top: inset, right: inset, bottom: inset, left: inset });
-      const points: Point[] = seriesPoints(values, domain, plot, { bandCenter: false });
+      const valueColor = (props.valueColor as string | undefined) ?? "#18181b";
+      const labelColor = (props.labelColor as string | undefined) ?? "#71717a";
+      const captionColor = (props.captionColor as string | undefined) ?? "#a1a1aa";
+      const valueFontSize = (props.valueFontSize as number | undefined) ?? 39;
+      const labelFontSize = (props.labelFontSize as number | undefined) ?? 13;
+      const padding = (props.padding as number | undefined) ?? 20;
+      const positiveColor = (props.positiveColor as string | undefined) ?? "#16a34a";
+      const negativeColor = (props.negativeColor as string | undefined) ?? "#dc2626";
+      const neutralColor = (props.neutralColor as string | undefined) ?? labelColor;
 
-      const svgChildren: ReactNode[] = [];
-      if (points.length > 0) {
-        if (showArea) {
-          svgChildren.push(
-            createElement("path", {
-              key: `${key}__area`,
-              d: areaPath(points, plot.y + plot.height, smooth),
-              fill: areaColor,
-              fillOpacity: 0.15,
-              stroke: "none",
-            })
-          );
-        }
-        svgChildren.push(
-          smooth
-            ? createElement("path", {
-                key: `${key}__line`,
-                d: smoothPath(points),
-                fill: "none",
-                stroke: color,
-                strokeWidth,
-                strokeLinejoin: "round",
-                strokeLinecap: "round",
-              })
-            : createElement("polyline", {
-                key: `${key}__line`,
-                points: pointsToAttr(points),
-                fill: "none",
-                stroke: color,
-                strokeWidth,
-                strokeLinejoin: "round",
-                strokeLinecap: "round",
-              })
-        );
-        if (showEndDot) {
-          const last = points[points.length - 1];
-          svgChildren.push(
-            createElement("circle", {
-              key: `${key}__enddot`,
-              cx: last.x,
-              cy: last.y,
-              r: strokeWidth + 1,
-              fill: endDotColor,
-            })
-          );
-        }
-      }
-
-      const svg = createElement(
-        "svg",
-        { key: `${key}__svg`, width, height, viewBox: `0 0 ${width} ${height}` },
-        svgChildren
-      );
-
-      return createElement(
+      // --- Label row: optional icon + label name ---
+      const labelRow = createElement(
         "div",
         {
-          key,
-          style: cleanStyle({ display: "flex", width, height, flexShrink: 0 }),
+          key: `${key}__labelrow`,
+          style: cleanStyle({
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+          }),
         },
-        svg
+        [
+          icon
+            ? createElement(
+                "div",
+                {
+                  key: `${key}__icon`,
+                  style: cleanStyle({ display: "flex", fontSize: labelFontSize + 2, lineHeight: 1 }),
+                },
+                icon
+              )
+            : null,
+          createElement(
+            "div",
+            {
+              key: `${key}__label`,
+              style: cleanStyle({
+                display: "flex",
+                fontFamily: FONT_FAMILY,
+                fontSize: labelFontSize,
+                fontWeight: 500,
+                color: labelColor,
+                letterSpacing: "0.01em",
+                lineHeight: 1.2,
+              }),
+            },
+            label
+          ),
+        ]
       );
+
+      // --- Delta chip: arrow glyph + value, tinted by intent/direction/sign ---
+      let deltaNode: ReactNode = null;
+      const delta = props.delta as Props | undefined;
+      if (delta && typeof delta.value === "string") {
+        // Infer direction from a leading sign when not given explicitly.
+        const inferred = delta.value.trim().startsWith("-")
+          ? "down"
+          : delta.value.trim().startsWith("+")
+            ? "up"
+            : "flat";
+        const direction = (delta.direction as string | undefined) ?? inferred;
+        // `intent` (positive/negative/neutral) can invert the color mapping for
+        // metrics where "down is good"; otherwise up→positive, down→negative.
+        const intent =
+          (delta.intent as string | undefined) ??
+          (direction === "up" ? "positive" : direction === "down" ? "negative" : "neutral");
+        const deltaColor =
+          (delta.color as string | undefined) ??
+          (intent === "positive"
+            ? positiveColor
+            : intent === "negative"
+              ? negativeColor
+              : neutralColor);
+        const showArrow = delta.showArrow !== false && direction !== "flat";
+
+        deltaNode = createElement(
+          "div",
+          {
+            key: `${key}__delta`,
+            style: cleanStyle({
+              display: "flex",
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 3,
+              alignSelf: "flex-start",
+              fontFamily: FONT_FAMILY,
+              fontSize: 13,
+              fontWeight: 600,
+              color: deltaColor,
+              lineHeight: 1,
+            }),
+          },
+          [
+            showArrow
+              ? createElement(
+                  "div",
+                  {
+                    key: `${key}__deltaarrow`,
+                    style: cleanStyle({ display: "flex", fontSize: 13, lineHeight: 1 }),
+                  },
+                  deltaArrow(direction)
+                )
+              : null,
+            createElement(
+              "div",
+              { key: `${key}__deltaval`, style: { display: "flex" } },
+              delta.value as string
+            ),
+          ]
+        );
+      }
+
+      // --- Value + delta on one baseline row ---
+      const valueRow = createElement(
+        "div",
+        {
+          key: `${key}__valuerow`,
+          style: cleanStyle({
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "flex-end",
+            gap: 8,
+          }),
+        },
+        [
+          createElement(
+            "div",
+            {
+              key: `${key}__value`,
+              style: cleanStyle({
+                display: "flex",
+                fontFamily: FONT_FAMILY,
+                fontSize: valueFontSize,
+                fontWeight: 700,
+                color: valueColor,
+                letterSpacing: "-0.02em",
+                lineHeight: 1,
+              }),
+            },
+            valueText
+          ),
+          deltaNode
+            ? createElement(
+                "div",
+                {
+                  key: `${key}__deltawrap`,
+                  style: cleanStyle({ display: "flex", paddingBottom: 4 }),
+                },
+                deltaNode
+              )
+            : null,
+        ]
+      );
+
+      const captionNode = caption
+        ? createElement(
+            "div",
+            {
+              key: `${key}__caption`,
+              style: cleanStyle({
+                display: "flex",
+                fontFamily: FONT_FAMILY,
+                fontSize: 12,
+                color: captionColor,
+                lineHeight: 1.3,
+              }),
+            },
+            caption
+          )
+        : null;
+
+      // The inline sparkline reuses the shared trend-line builder. Its props were
+      // theme-resolved with the rest of the tree, so colors are already literal.
+      const sparkProps = props.sparkline as Props | undefined;
+      const sparklineNode = sparkProps
+        ? buildSparklineNode(`${key}__spark`, sparkProps)
+        : null;
+      const sparklinePosition = (props.sparklinePosition as string | undefined) ?? "below";
+
+      // Text column: label → value+delta → caption.
+      const textColumn = createElement(
+        "div",
+        {
+          key: `${key}__textcol`,
+          style: cleanStyle({
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
+            flex: sparklineNode && sparklinePosition === "right" ? 1 : undefined,
+          }),
+        },
+        [labelRow, valueRow, captionNode].filter((n) => n !== null)
+      );
+
+      // Assemble the inner content. `right` places the sparkline beside the text
+      // (space-between); `below` stacks it under, spanning the card width.
+      let inner: ReactNode;
+      if (sparklineNode && sparklinePosition === "right") {
+        inner = createElement(
+          "div",
+          {
+            key: `${key}__inner`,
+            style: cleanStyle({
+              display: "flex",
+              flexDirection: "row",
+              alignItems: "flex-end",
+              justifyContent: "space-between",
+              gap: 12,
+            }),
+          },
+          [
+            textColumn,
+            createElement(
+              "div",
+              {
+                key: `${key}__sparkwrap`,
+                style: cleanStyle({ display: "flex", alignItems: "flex-end", flexShrink: 0 }),
+              },
+              sparklineNode
+            ),
+          ]
+        );
+      } else {
+        inner = createElement(
+          "div",
+          {
+            key: `${key}__inner`,
+            style: cleanStyle({ display: "flex", flexDirection: "column", gap: 12 }),
+          },
+          [textColumn, sparklineNode].filter((n) => n !== null)
+        );
+      }
+
+      const cardStyle: CSSProperties = plain
+        ? {
+            display: "flex",
+            flexDirection: "column",
+            width: props.width as CSSProperties["width"],
+            flex: props.flex as CSSProperties["flex"],
+          }
+        : {
+            display: "flex",
+            flexDirection: "column",
+            padding,
+            backgroundColor: (props.backgroundColor as string | undefined) ?? "#fafafa",
+            borderColor: (props.borderColor as string | undefined) ?? "#e4e4e7",
+            borderWidth: (props.borderWidth as number | undefined) ?? 1,
+            borderStyle: "solid",
+            borderRadius: (props.borderRadius as number | undefined) ?? 12,
+            boxShadow: props.elevation as string | undefined,
+            width: props.width as CSSProperties["width"],
+            flex: props.flex as CSSProperties["flex"],
+          };
+
+      return createElement("div", { key, style: cleanStyle(cardStyle) }, inner);
     }
     default:
       throw new Error(`Unsupported render component "${element.type}" at element "${key}".`);

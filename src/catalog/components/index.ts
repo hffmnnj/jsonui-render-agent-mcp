@@ -24,4 +24,5 @@ export {
   barChartComponent,
   lineChartComponent,
   sparklineComponent,
+  metricComponent,
 } from "./charts/index";

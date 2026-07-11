@@ -8,3 +8,6 @@ export { progressRingComponent } from "./progress-ring";
 export { barChartComponent } from "./bar";
 export { lineChartComponent } from "./line";
 export { sparklineComponent } from "./sparkline";
+
+// Metric / stat card (Task 4.3): the flagship KPI tile.
+export { metricComponent } from "./metric";
