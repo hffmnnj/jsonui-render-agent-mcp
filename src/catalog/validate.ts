@@ -64,7 +64,11 @@ const componentPropsSchemas = {
   Metric: metricPropsSchema,
   PieChart: pieChartPropsSchema,
   ProgressRing: progressRingPropsSchema,
-};
+} as const;
+
+const catalogComponentNames = Object.freeze(
+  Object.keys(componentPropsSchemas) as string[]
+);
 
 type ComponentName = keyof typeof componentPropsSchemas;
 
@@ -81,26 +85,24 @@ function pathToString(path: PropertyKey[]): string {
     .join("");
 }
 
+function validationError(path: string, message: string): ValidationError {
+  return {
+    ok: false,
+    error: { path, message },
+  };
+}
+
 function zodErrorToResult(
   error: z.ZodError<unknown>,
   basePath: string
 ): ValidationError {
   const firstIssue = error.issues[0];
   if (!firstIssue) {
-    return {
-      ok: false,
-      error: { path: basePath, message: "Invalid component props." },
-    };
+    return validationError(basePath, "Invalid component props.");
   }
 
   const issuePath = pathToString(firstIssue.path);
-  return {
-    ok: false,
-    error: {
-      path: basePath + issuePath,
-      message: firstIssue.message,
-    },
-  };
+  return validationError(`${basePath}${issuePath}`, firstIssue.message);
 }
 
 function validateElementProps(
@@ -109,17 +111,12 @@ function validateElementProps(
 ): ValidationResult | undefined {
   const type = element.type;
   if (!isComponentName(type)) {
-    return {
-      ok: false,
-      error: {
-        path: `.elements.${key}.type`,
-        message: `Invalid option: expected one of ${Object.keys(
-          componentPropsSchemas
-        )
-          .map((name) => `"${name}"`)
-          .join("|")}`,
-      },
-    };
+    return validationError(
+      `.elements.${key}.type`,
+      `Invalid option: expected one of ${catalogComponentNames
+        .map((name) => `"${name}"`)
+        .join("|")}`
+    );
   }
 
   const propsSchema = componentPropsSchemas[type];
@@ -137,18 +134,12 @@ export function validateSpec(spec: unknown): ValidationResult {
   if (!catalogResult.success) {
     const firstIssue = catalogResult.error?.issues[0];
     if (!firstIssue) {
-      return {
-        ok: false,
-        error: { path: ".", message: "Validation failed for an unknown reason." },
-      };
+      return validationError(".", "Validation failed for an unknown reason.");
     }
-    return {
-      ok: false,
-      error: {
-        path: pathToString(firstIssue.path),
-        message: firstIssue.message,
-      },
-    };
+    return validationError(
+      pathToString(firstIssue.path),
+      firstIssue.message
+    );
   }
 
   const parsed = catalogResult.data as Spec;
