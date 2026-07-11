@@ -1,5 +1,5 @@
 import { boxPropsSchema } from "../schema";
-import type { ComponentDefinition } from "@json-render/shadcn-svelte";
+import type { ComponentDefinition } from "../types";
 
 export const boxComponent: ComponentDefinition = {
   props: boxPropsSchema,

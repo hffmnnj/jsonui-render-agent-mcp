@@ -1,5 +1,5 @@
 import { headingPropsSchema } from "../schema";
-import type { ComponentDefinition } from "@json-render/shadcn-svelte";
+import type { ComponentDefinition } from "../types";
 
 export const headingComponent: ComponentDefinition = {
   props: headingPropsSchema,
