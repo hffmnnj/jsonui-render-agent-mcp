@@ -137,6 +137,10 @@ const componentDefaults: Record<string, Record<string, DefaultValue>> = {
   Heading: {
     color: { $theme: "color.foreground" },
   },
+  // A bare Icon inherits the theme's foreground color.
+  Icon: {
+    color: { $theme: "color.foreground" },
+  },
   // A bare Divider tracks the theme's border color without the author writing it.
   Divider: {
     color: { $theme: "color.border" },

@@ -27,6 +27,7 @@ import {
   type Point,
 } from "../catalog/components/charts/svg-helpers";
 import type { ResolvedSpec } from "./resolve-theme";
+import { getIconData } from "../catalog/icons";
 import { DEFAULT_RENDER_HEIGHT, DEFAULT_RENDER_WIDTH } from "./output";
 
 const FONT_FAMILY = "FreeSans";
@@ -305,6 +306,120 @@ function deltaArrow(direction: string): string {
   }
 }
 
+/* ------------------------------------------------------------------ *
+ * Icon (HugeIcons free-tier) — inline-SVG builder.                    *
+ *                                                                     *
+ * HugeIcons ship each icon as `[tagName, attributes][]` on a 24×24    *
+ * viewBox, with `stroke: "currentColor"` and `strokeWidth: "1.5"`.    *
+ * Satori has no `currentColor` inheritance and rejects SVG <text>,    *
+ * but the icon shapes are only path/circle/rect/ellipse, all of which *
+ * it renders. We rewrite `currentColor` to the resolved literal color *
+ * and override the stroke width, then scale the 24px viewBox to the   *
+ * requested size. Colors arrive theme-resolved (resolveTheme's Icon   *
+ * default fills `color` with the foreground token when omitted).      *
+ * ------------------------------------------------------------------ */
+
+const ICON_VIEWBOX = 24;
+const HUGEICON_ATTR_MAP: Record<string, string> = {
+  strokeLinecap: "strokeLinecap",
+  strokeLinejoin: "strokeLinejoin",
+  strokeWidth: "strokeWidth",
+  fillRule: "fillRule",
+  clipRule: "clipRule",
+};
+
+/**
+ * Build the `<svg>` node for a resolved icon. `color` is the literal stroke/fill
+ * color (already theme-resolved); `size` is the square px size; `strokeWidth`
+ * overrides the icon's own 1.5. Returns `null` for an unknown name so callers
+ * (slots) can gracefully omit it — the standalone Icon component's name is
+ * already validated upstream, so it always resolves here.
+ */
+function buildIconNode(
+  key: string,
+  name: string,
+  color: string | undefined,
+  size: number,
+  strokeWidth: number | undefined
+): ReactNode | null {
+  const data = getIconData(name);
+  if (!data) return null;
+
+  const children = data.map((node, index) => {
+    const [tag, rawAttrs] = node;
+    const attrs: Record<string, unknown> = { key: `${key}__p${index}` };
+    for (const [attrKey, value] of Object.entries(rawAttrs)) {
+      if (attrKey === "key") continue;
+      // Replace `currentColor` (stroke or fill) with the resolved literal color.
+      if (value === "currentColor") {
+        attrs[attrKey] = color;
+        continue;
+      }
+      if (attrKey === "strokeWidth" && strokeWidth !== undefined) {
+        attrs[attrKey] = strokeWidth;
+        continue;
+      }
+      const mapped = HUGEICON_ATTR_MAP[attrKey] ?? attrKey;
+      attrs[mapped] = value;
+    }
+    // Icons that draw with fill:none + stroke keep their stroke color; solid
+    // icons paint `currentColor` as fill (handled by the replace above).
+    return createElement(tag, attrs);
+  });
+
+  return createElement(
+    "svg",
+    {
+      key: `${key}__svg`,
+      width: size,
+      height: size,
+      viewBox: `0 0 ${ICON_VIEWBOX} ${ICON_VIEWBOX}`,
+      fill: "none",
+    },
+    children
+  );
+}
+
+/**
+ * Resolve an `iconName` slot (bare string or `{ name, color?, size?, strokeWidth? }`)
+ * into an inline icon node, inheriting the host's `defaultColor`/`defaultSize`
+ * when the slot omits them. Returns `null` when absent or unresolvable, so a
+ * host component with no icon renders exactly as before (backward-compatible).
+ */
+function buildIconSlot(
+  key: string,
+  slot: unknown,
+  defaultColor: string | undefined,
+  defaultSize: number
+): ReactNode | null {
+  if (slot === undefined || slot === null) return null;
+
+  let name: string | undefined;
+  let color = defaultColor;
+  let size = defaultSize;
+  let strokeWidth: number | undefined;
+
+  if (typeof slot === "string") {
+    name = slot;
+  } else if (typeof slot === "object") {
+    const rec = slot as Record<string, unknown>;
+    if (typeof rec.name === "string") name = rec.name;
+    if (typeof rec.color === "string") color = rec.color;
+    if (typeof rec.size === "number") size = rec.size;
+    if (typeof rec.strokeWidth === "number") strokeWidth = rec.strokeWidth;
+  }
+  if (!name) return null;
+
+  const icon = buildIconNode(key, name, color, size, strokeWidth);
+  if (!icon) return null;
+
+  return createElement(
+    "div",
+    { key, style: cleanStyle({ display: "flex", flexShrink: 0, width: size, height: size }) },
+    icon
+  );
+}
+
 function renderElement(
   spec: ResolvedSpec,
   key: string,
@@ -463,6 +578,23 @@ function renderElement(
         requiredText(props, `Heading element "${key}"`)
       );
     }
+    case "Icon": {
+      // A single HugeIcons vector icon. `name` is validated upstream; `color`
+      // is filled by resolveTheme's Icon default (foreground) when omitted.
+      const name = typeof props.name === "string" ? props.name : "";
+      const size = (props.size as number | undefined) ?? 24;
+      const color = props.color as string | undefined;
+      const strokeWidth = props.strokeWidth as number | undefined;
+      const icon = buildIconNode(key, name, color, size, strokeWidth);
+      return createElement(
+        "div",
+        {
+          key,
+          style: cleanStyle({ display: "flex", flexShrink: 0, width: size, height: size }),
+        },
+        icon
+      );
+    }
     case "Grid": {
       // Satori/Yoga has no CSS grid — emulate equal columns with flex-wrap.
       // Satori also rejects `calc()`, so cells use a plain percentage basis
@@ -550,18 +682,35 @@ function renderElement(
       // supplies the neutral chip pair when a bare Badge omits them).
       const label = requiredText(props, `Badge element "${key}"`);
       const text = props.uppercase ? label.toUpperCase() : label;
+      const fontSize = (props.fontSize as number | undefined) ?? 12;
+      const textColor = props.color as string | undefined;
+      // Optional leading vector icon — inherits the badge's text color and sizes
+      // to the font. Omitted when absent, so icon-less badges are unchanged.
+      const iconNode = buildIconSlot(
+        `${key}__icon`,
+        props.iconName,
+        textColor,
+        Math.round(fontSize * 1.15)
+      );
+      const textNode = createElement(
+        "div",
+        { key: `${key}__text`, style: { display: "flex" } },
+        text
+      );
       return createElement(
         "div",
         {
           key,
           style: cleanStyle({
             display: "flex",
+            flexDirection: "row",
             alignItems: "center",
+            gap: iconNode ? 5 : 0,
             alignSelf: "flex-start",
             fontFamily: FONT_FAMILY,
-            fontSize: (props.fontSize as number | undefined) ?? 12,
+            fontSize,
             fontWeight: fontWeightValue(props.fontWeight, 600),
-            color: props.color as string | undefined,
+            color: textColor,
             backgroundColor: props.backgroundColor as string | undefined,
             borderColor: props.borderColor as string | undefined,
             borderWidth: props.borderWidth as CSSProperties["borderWidth"],
@@ -576,7 +725,7 @@ function renderElement(
             lineHeight: 1,
           }),
         },
-        text
+        iconNode ? [iconNode, textNode] : text
       );
     }
     case "Avatar": {
@@ -700,22 +849,33 @@ function renderElement(
         contentChildren
       );
 
-      const children: ReactNode[] = showAccentBar
-        ? [
-            createElement("div", {
-              key: `${key}__bar`,
-              style: cleanStyle({
-                display: "flex",
-                flexShrink: 0,
-                width: 3,
-                alignSelf: "stretch",
-                backgroundColor: accentColor,
-                borderRadius: 9999,
-              }),
+      // Optional leading vector icon, tinted with the alert's accent/title color
+      // and aligned to the top of the content. Absent icons leave layout intact.
+      const iconNode = buildIconSlot(
+        `${key}__icon`,
+        props.iconName,
+        accentColor ?? titleColor,
+        20
+      );
+
+      const children: ReactNode[] = [];
+      if (showAccentBar) {
+        children.push(
+          createElement("div", {
+            key: `${key}__bar`,
+            style: cleanStyle({
+              display: "flex",
+              flexShrink: 0,
+              width: 3,
+              alignSelf: "stretch",
+              backgroundColor: accentColor,
+              borderRadius: 9999,
             }),
-            inner,
-          ]
-        : [inner];
+          })
+        );
+      }
+      if (iconNode) children.push(iconNode);
+      children.push(inner);
 
       return createElement(
         "div",
@@ -724,7 +884,8 @@ function renderElement(
           style: cleanStyle({
             display: "flex",
             flexDirection: "row",
-            gap: showAccentBar ? 12 : 0,
+            alignItems: iconNode && !showAccentBar ? "flex-start" : undefined,
+            gap: showAccentBar || iconNode ? 12 : 0,
             padding,
             backgroundColor: bg,
             borderColor: border,
@@ -1771,6 +1932,16 @@ function renderElement(
       const negativeColor = props.negativeColor as string | undefined;
       const neutralColor = (props.neutralColor as string | undefined) ?? labelColor;
 
+      // A vector HugeIcons slot (iconName) takes precedence over the plain-text
+      // `icon` glyph; either sits before the label. Vector icon inherits the
+      // label color and sizes to the label font.
+      const vectorIcon = buildIconSlot(
+        `${key}__vicon`,
+        props.iconName,
+        labelColor,
+        labelFontSize + 3
+      );
+
       // --- Label row: optional icon + label name ---
       const labelRow = createElement(
         "div",
@@ -1784,7 +1955,9 @@ function renderElement(
           }),
         },
         [
-          icon
+          vectorIcon
+            ? vectorIcon
+            : icon
             ? createElement(
                 "div",
                 {
