@@ -8,6 +8,8 @@ import {
   DEFAULT_RENDER_SCALE,
   resolveRenderOptions,
 } from "./index";
+import { loadTwemojiAsset, twemojiAssetName } from "./emoji";
+import { renderToSvg } from "./satori";
 import { validateSpec } from "../catalog/validate";
 
 const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -109,6 +111,16 @@ function shortMetricCardFixture() {
   return resolveTheme(validated.tree, "light");
 }
 
+function resolveFixture(spec: Record<string, unknown>) {
+  const validated = validateSpec(spec);
+  if (!validated.ok) throw new Error(validated.error.message);
+  return resolveTheme(validated.tree, "light");
+}
+
+function emojiImageCount(svg: string): number {
+  return (svg.match(/data:image\/svg\+xml;base64,/g) ?? []).length;
+}
+
 describe("renderToPng", () => {
   it("renders a validated and resolved spec as a crisp default-scale PNG", async () => {
     const png = await renderToPng(renderFixture());
@@ -196,5 +208,68 @@ describe("renderToPng", () => {
     console.log(
       `dashboard exemplar: ${Math.round(elapsed)}ms, ${png.byteLength.toLocaleString()} bytes (${(png.byteLength / 1024).toFixed(1)}KB)`
     );
+  });
+
+  it("loads full-set Twemoji SVGs by the documented grapheme code-point names", async () => {
+    expect(twemojiAssetName("📊")).toBe("1f4ca");
+    expect(twemojiAssetName("👨‍💻")).toBe("1f468-200d-1f4bb");
+
+    const emojiAssets = await Promise.all(["📊", "✅", "🚀", "👨‍💻"].map(loadTwemojiAsset));
+    for (const emojiAsset of emojiAssets) {
+      expect(emojiAsset).toStartWith("data:image/svg+xml;base64,");
+      expect(Buffer.from(emojiAsset.split(",")[1]!, "base64").toString("utf8")).toMatch(
+        /fill="#[0-9A-Fa-f]{3,8}"/
+      );
+    }
+  });
+
+  it("substitutes color Twemoji SVGs in the reported dashboard-title repro", async () => {
+    const resolved = resolveFixture({
+      root: "frame",
+      elements: {
+        frame: {
+          type: "Frame",
+          props: { width: 480, height: 160, padding: 24 },
+          children: ["title"],
+        },
+        title: {
+          type: "Heading",
+          props: { text: "📊 Q3 Dashboard ✅ 🚀 👨‍💻", level: "h2" },
+          children: [],
+        },
+      },
+    });
+
+    const svg = await renderToSvg(resolved);
+    // Satori has embedded one local color SVG for every emoji grapheme, rather
+    // than asking FreeSans to draw a missing-glyph box or monochrome fallback.
+    expect(emojiImageCount(svg)).toBe(4);
+    expect(svg).toContain("data:image/svg+xml;base64,");
+  });
+
+  it("substitutes color Twemoji SVGs for emoji-prefixed service List items", async () => {
+    const resolved = resolveFixture({
+      root: "frame",
+      elements: {
+        frame: {
+          type: "Frame",
+          props: { width: 520, height: 260, padding: 24 },
+          children: ["list"],
+        },
+        list: {
+          type: "List",
+          props: {
+            marker: "none",
+            items: ["🟢 API Gateway", "🔒 Auth Service", "📦 Object Store"],
+          },
+          children: [],
+        },
+      },
+    });
+
+    const svg = await renderToSvg(resolved);
+    const png = await renderToPng(resolved);
+    expect(emojiImageCount(svg)).toBe(3);
+    expect(png.subarray(0, 8)).toEqual(pngSignature);
   });
 });

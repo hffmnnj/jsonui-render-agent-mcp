@@ -27,6 +27,7 @@ import {
   type Point,
 } from "../catalog/components/charts/svg-helpers";
 import type { ResolvedSpec } from "./resolve-theme";
+import { loadAdditionalEmojiAsset } from "./emoji";
 import { DEFAULT_RENDER_HEIGHT, DEFAULT_RENDER_WIDTH } from "./output";
 
 const FONT_FAMILY = "FreeSans";
@@ -2067,9 +2068,10 @@ export async function renderToSvg(
   const tree = renderElement(spec, spec.root, new Set(), width, height);
 
   const fonts = await bundledFonts();
+  const emojiOptions = { loadAdditionalAsset: loadAdditionalEmojiAsset };
   return height === undefined
-    ? satori(tree, { width, fonts })
-    : satori(tree, { width, height, fonts });
+    ? satori(tree, { width, fonts, ...emojiOptions })
+    : satori(tree, { width, height, fonts, ...emojiOptions });
 }
 
 export { DEFAULT_RENDER_HEIGHT as DEFAULT_HEIGHT, DEFAULT_RENDER_WIDTH as DEFAULT_WIDTH, FONT_FAMILY };
