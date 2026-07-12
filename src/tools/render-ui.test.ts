@@ -38,6 +38,22 @@ type ToolResponse = {
   isError?: boolean;
 };
 
+type StructuredError = {
+  code: string;
+  path: string;
+  message: string;
+};
+
+function structuredError(result: ToolResponse): StructuredError {
+  expect(result.isError).toBe(true);
+  expect(result.content[0]?.type).toBe("text");
+  return JSON.parse(result.content[0]?.text ?? "") as StructuredError;
+}
+
+function pngDimensions(png: Buffer): { width: number; height: number } {
+  return { width: png.readUInt32BE(16), height: png.readUInt32BE(20) };
+}
+
 async function withClient<T>(callback: (client: Client) => Promise<T>): Promise<T> {
   const transport = new StdioClientTransport({
     command: Bun.which("bun") ?? process.execPath,
@@ -122,6 +138,37 @@ describe("render_ui tool", () => {
     });
   });
 
+  test("auto-sizes a Frame without height to its content layout", async () => {
+    await withClient(async (client) => {
+      const spec: { elements: { frame: { props: Record<string, unknown> } } } = minimalSpec();
+      delete spec.elements.frame.props.height;
+      const result = (await client.callTool({
+        name: "render_ui",
+        arguments: { spec, theme: "light" },
+      })) as ToolResponse;
+
+      expect(result.isError).toBeUndefined();
+      const png = Buffer.from(result.content[0]!.data!, "base64");
+      const dimensions = pngDimensions(png);
+      expect(dimensions.width).toBe(640);
+      expect(dimensions.height).toBeGreaterThan(100);
+      expect(dimensions.height).toBeLessThan(500);
+      expect(dimensions.height).not.toBe(1260);
+    });
+  });
+
+  test("accepts autoSize as an explicit content-height request", async () => {
+    await withClient(async (client) => {
+      const result = (await client.callTool({
+        name: "render_ui",
+        arguments: { spec: minimalSpec(), theme: "light", autoSize: true },
+      })) as ToolResponse;
+
+      expect(result.isError).toBeUndefined();
+      expect(pngDimensions(Buffer.from(result.content[0]!.data!, "base64")).height).toBeLessThan(360);
+    });
+  });
+
   test("returns a structured validation error for an invalid spec without crashing", async () => {
     await withClient(async (client) => {
       const result = (await client.callTool({
@@ -137,10 +184,9 @@ describe("render_ui tool", () => {
         },
       })) as ToolResponse;
 
-      expect(result.isError).toBe(true);
-      expect(result.content[0].type).toBe("text");
-      expect(result.content[0].text).toContain("Validation error");
-      expect(result.content[0].text).toContain(".elements.frame.type");
+      const error = structuredError(result);
+      expect(error.code).toBe("VALIDATION_ERROR");
+      expect(error.path).toBe(".elements.frame.type");
     });
   });
 
@@ -152,17 +198,130 @@ describe("render_ui tool", () => {
           spec: {
             root: "frame",
             elements: {
-              frame: { type: "Frame", props: { width: 320 }, children: [] },
+              frame: { type: "Frame", props: { height: 180 }, children: [] },
             },
           },
           theme: "light",
         },
       })) as ToolResponse;
 
-      expect(result.isError).toBe(true);
-      expect(result.content[0].type).toBe("text");
-      expect(result.content[0].text).toContain("Validation error");
-      expect(result.content[0].text).toContain(".elements.frame.props");
+      const error = structuredError(result);
+      expect(error.code).toBe("VALIDATION_ERROR");
+      expect(error.path).toContain(".elements.frame.props");
+    });
+  });
+
+  test("rejects an oversized List before rendering", async () => {
+    await withClient(async (client) => {
+      const result = (await client.callTool({
+        name: "render_ui",
+        arguments: {
+          spec: {
+            root: "frame",
+            elements: {
+              frame: {
+                type: "Frame",
+                props: { width: 320, height: 180 },
+                children: ["list"],
+              },
+              list: {
+                type: "List",
+                props: { items: Array.from({ length: 1_001 }, () => "item") },
+                children: [],
+              },
+            },
+          },
+        },
+      })) as ToolResponse;
+
+      const error = structuredError(result);
+      expect(error).toMatchObject({
+        code: "VALIDATION_ERROR",
+        path: ".elements.list.props.items",
+      });
+      expect(error.message).toContain("maximum length of 1000");
+    });
+  });
+
+  test("returns a structured error for a dangling child reference", async () => {
+    await withClient(async (client) => {
+      const result = (await client.callTool({
+        name: "render_ui",
+        arguments: {
+          spec: {
+            root: "frame",
+            elements: {
+              frame: { type: "Frame", props: { width: 320, height: 180 }, children: ["missing"] },
+            },
+          },
+        },
+      })) as ToolResponse;
+
+      const error = structuredError(result);
+      expect(error).toMatchObject({ code: "VALIDATION_ERROR", path: ".elements.frame.children[0]" });
+      expect(error.message).toContain("does not exist");
+    });
+  });
+
+  test("returns a structured error for a missing root key", async () => {
+    await withClient(async (client) => {
+      const result = (await client.callTool({
+        name: "render_ui",
+        arguments: {
+          spec: {
+            root: "missing",
+            elements: {
+              frame: { type: "Frame", props: { width: 320, height: 180 }, children: [] },
+            },
+          },
+        },
+      })) as ToolResponse;
+
+      const error = structuredError(result);
+      expect(error).toMatchObject({ code: "VALIDATION_ERROR", path: ".root" });
+      expect(error.message).toContain("does not exist");
+    });
+  });
+
+  test("returns a structured error for non-positive Frame dimensions", async () => {
+    await withClient(async (client) => {
+      const result = (await client.callTool({
+        name: "render_ui",
+        arguments: {
+          spec: {
+            root: "frame",
+            elements: {
+              frame: { type: "Frame", props: { width: -320, height: 180 }, children: [] },
+            },
+          },
+        },
+      })) as ToolResponse;
+
+      const error = structuredError(result);
+      expect(error).toMatchObject({ code: "VALIDATION_ERROR", path: ".elements.frame.props.width" });
+      expect(error.message).toContain("finite positive");
+    });
+  });
+
+  test("returns a structured error for cyclic child references", async () => {
+    await withClient(async (client) => {
+      const result = (await client.callTool({
+        name: "render_ui",
+        arguments: {
+          spec: {
+            root: "frame",
+            elements: {
+              frame: { type: "Frame", props: { width: 320, height: 180 }, children: ["a"] },
+              a: { type: "Stack", props: {}, children: ["b"] },
+              b: { type: "Stack", props: {}, children: ["a"] },
+            },
+          },
+        },
+      })) as ToolResponse;
+
+      const error = structuredError(result);
+      expect(error).toMatchObject({ code: "VALIDATION_ERROR", path: ".elements.a" });
+      expect(error.message).toContain("cycle");
     });
   });
 });
