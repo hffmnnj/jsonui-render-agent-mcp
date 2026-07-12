@@ -27,6 +27,7 @@ import {
   type Point,
 } from "../catalog/components/charts/svg-helpers";
 import type { ResolvedSpec } from "./resolve-theme";
+import { loadAdditionalEmojiAsset } from "./emoji";
 import { DEFAULT_RENDER_HEIGHT, DEFAULT_RENDER_WIDTH } from "./output";
 
 const FONT_FAMILY = "FreeSans";
@@ -37,6 +38,8 @@ export interface RenderOptions {
   width?: number;
   /** Override the Frame's logical canvas height. */
   height?: number;
+  /** Compute the logical canvas height from Satori/Yoga's resolved layout. */
+  autoSize?: boolean;
 }
 
 type Props = Record<string, unknown>;
@@ -310,7 +313,7 @@ function renderElement(
   key: string,
   ancestors: ReadonlySet<string>,
   rootWidth: number,
-  rootHeight: number
+  rootHeight: number | undefined
 ): ReactNode {
   if (ancestors.has(key)) {
     throw new Error(`Cannot render cyclic child reference at element "${key}".`);
@@ -2055,13 +2058,20 @@ export async function renderToSvg(
     options.width ?? rootProps.width ?? DEFAULT_RENDER_WIDTH,
     "Render width"
   );
-  const height = finiteDimension(
-    options.height ?? rootProps.height ?? DEFAULT_RENDER_HEIGHT,
-    "Render height"
-  );
+  // Satori supports a width-only render. In that mode Yoga calculates the root
+  // layout's natural height and Satori writes it into the SVG viewport.
+  const autoSize = options.autoSize === true ||
+    (options.height === undefined && rootProps.height === undefined);
+  const height = autoSize
+    ? undefined
+    : finiteDimension(options.height ?? rootProps.height ?? DEFAULT_RENDER_HEIGHT, "Render height");
   const tree = renderElement(spec, spec.root, new Set(), width, height);
 
-  return satori(tree, { width, height, fonts: await bundledFonts() });
+  const fonts = await bundledFonts();
+  const emojiOptions = { loadAdditionalAsset: loadAdditionalEmojiAsset };
+  return height === undefined
+    ? satori(tree, { width, fonts, ...emojiOptions })
+    : satori(tree, { width, height, fonts, ...emojiOptions });
 }
 
 export { DEFAULT_RENDER_HEIGHT as DEFAULT_HEIGHT, DEFAULT_RENDER_WIDTH as DEFAULT_WIDTH, FONT_FAMILY };

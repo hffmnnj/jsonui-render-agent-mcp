@@ -346,6 +346,7 @@ function validateFrameDimensions(
     if (element.type !== "Frame") continue;
     for (const dimension of ["width", "height"] as const) {
       const value = element.props[dimension];
+      if (dimension === "height" && value === undefined) continue;
       if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
         return validationError(
           `.elements.${key}.props.${dimension}`,
