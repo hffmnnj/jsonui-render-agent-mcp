@@ -19,6 +19,7 @@
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "satori": "^0.26.0",
+    "twemoji-emojis": "^14.1.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -30,5 +31,8 @@
   "peerDependencies": {},
   "engines": {
     "bun": ">=0.8.1"
-  }
+  },
+  "trustedDependencies": [
+    "twemoji-emojis"
+  ]
 }

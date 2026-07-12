@@ -11,6 +11,8 @@ export const DEFAULT_RENDER_SCALE = 2;
 export interface RenderOutputOptions {
   width?: number;
   height?: number;
+  /** Compute height from the Frame's natural Satori/Yoga layout. */
+  autoSize?: boolean;
   scale?: number;
 }
 
@@ -29,7 +31,7 @@ function resolveDimension(
 /** Resolve a complete set of render dimensions and scale from optional overrides. */
 export function resolveRenderOptions(
   options: RenderOutputOptions = {}
-): Required<RenderOutputOptions> {
+): Required<Omit<RenderOutputOptions, "autoSize">> {
   return {
     width: resolveDimension(options.width, DEFAULT_RENDER_WIDTH, "width"),
     height: resolveDimension(options.height, DEFAULT_RENDER_HEIGHT, "height"),

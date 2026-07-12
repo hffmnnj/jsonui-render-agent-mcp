@@ -1,7 +1,7 @@
 import { Resvg } from "@resvg/resvg-js";
 import { DEFAULT_RENDER_SCALE } from "./output";
 
-/** Physical-pixel scaling for a logical Satori SVG canvas. */
+/** Physical-pixel scaling for a logical Satori SVG canvas, including natural-height SVGs. */
 export interface RasterizeOptions {
   /** PNG density multiplier. Defaults to 2 for crisp chat-gateway previews. */
   scale?: number;
