@@ -13,6 +13,31 @@ const renderInputSchema = z.object({
     .optional()
     .default("light")
     .describe('Visual theme for the render. Either "light" or "dark"; defaults to "light".'),
+  width: z
+    .number()
+    .positive()
+    .finite()
+    .optional()
+    .describe("Override the render width in logical pixels. Defaults to the Frame root width or 1200."),
+  height: z
+    .number()
+    .positive()
+    .finite()
+    .optional()
+    .describe("Override the render height in logical pixels. Cannot be combined with autoSize."),
+  autoSize: z
+    .boolean()
+    .optional()
+    .describe("Compute height from the resolved Satori/Yoga layout. Overrides a Frame height; cannot be combined with height."),
+  scale: z
+    .number()
+    .min(1)
+    .finite()
+    .optional()
+    .describe("PNG density multiplier for crisp output. Defaults to 2."),
+}).refine((value) => !(value.autoSize === true && value.height !== undefined), {
+  path: ["autoSize"],
+  message: "autoSize cannot be combined with an explicit height.",
 });
 
 const THEME_NAMES: readonly ThemeName[] = ["light", "dark"];
@@ -26,16 +51,24 @@ function validationErrorToContent(error: ValidationError["error"]) {
     content: [
       {
         type: "text" as const,
-        text: `Validation error at ${error.path}: ${error.message}`,
+        text: JSON.stringify(error),
       },
     ],
     isError: true as const,
   };
 }
 
-function renderErrorContent(message: string) {
+function renderErrorContent() {
+  // Do not expose renderer internals. Validation handles determinable failures
+  // before rendering; this preserves the same machine-readable error contract
+  // for unexpected render and output failures.
+  const structuredError = {
+    code: "RENDER_ERROR",
+    path: ".",
+    message: "Rendering failed.",
+  };
   return {
-    content: [{ type: "text" as const, text: `Render error: ${message}` }],
+    content: [{ type: "text" as const, text: JSON.stringify(structuredError) }],
     isError: true as const,
   };
 }
@@ -46,7 +79,11 @@ function invalidArgsContent(error: z.ZodError<unknown>) {
     content: [
       {
         type: "text" as const,
-        text: `Invalid tool arguments at .${firstIssue?.path.join(".") ?? ""}: ${firstIssue?.message ?? "Unknown error"}`,
+        text: JSON.stringify({
+          code: "VALIDATION_ERROR",
+          path: `.${firstIssue?.path.join(".") ?? ""}`,
+          message: firstIssue?.message ?? "Invalid tool arguments.",
+        }),
       },
     ],
     isError: true as const,
@@ -64,13 +101,20 @@ export function registerRenderUi(server: McpServer): void {
     "render_ui",
     {
       description:
-        "Render a JSON UI spec to a PNG image. " +
-        "Accepts a structured `spec` and an optional `theme` (\"light\" or \"dark\"). " +
+         "Render a JSON UI spec to a PNG image. " +
+         "Accepts a structured `spec` and an optional `theme` (\"light\" or \"dark\"). " +
+         "Omit Frame.height or pass `autoSize: true` to fit the canvas height to content. " +
         "Returns a base64 PNG image content block plus a text block with the on-disk temp path. " +
-        "Currently supported catalog components: Frame, Box, Stack, Row, Text, Heading.",
+        "Discover the full component catalog and prop schemas by calling `list_components`. " +
+        "Representative components include Frame, Box, Stack, Row, Text, Heading, " +
+        "Card, Table, Badge, Alert, BarChart, LineChart, PieChart, Sparkline, Metric, and Progress.",
       inputSchema: {
         spec: z.unknown(),
         theme: z.enum(["light", "dark"]).optional().default("light"),
+        width: z.number().positive().optional(),
+        height: z.number().positive().optional(),
+        autoSize: z.boolean().optional(),
+        scale: z.number().min(1).optional(),
       },
     },
     async (args: unknown) => {
@@ -79,7 +123,7 @@ export function registerRenderUi(server: McpServer): void {
         return invalidArgsContent(parsed.error);
       }
 
-      const { spec, theme: themeValue } = parsed.data;
+      const { spec, theme: themeValue, width, height, autoSize, scale } = parsed.data;
       const theme = isThemeName(themeValue) ? themeValue : "light";
 
       const validation = validateSpec(spec);
@@ -89,12 +133,11 @@ export function registerRenderUi(server: McpServer): void {
 
       try {
         const resolved = resolveTheme(validation.tree, theme);
-        const pngBuffer = await renderToPng(resolved);
+        const pngBuffer = await renderToPng(resolved, { width, height, autoSize, scale });
         const { path } = await writeTempPng(pngBuffer);
         return buildImageContent(pngBuffer, path);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return renderErrorContent(message);
+      } catch {
+        return renderErrorContent();
       }
     },
   );

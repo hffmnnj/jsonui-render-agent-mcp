@@ -1,15 +1,14 @@
 import { Resvg } from "@resvg/resvg-js";
+import { DEFAULT_RENDER_SCALE } from "./output";
 
-/** Physical-pixel scaling for a logical Satori SVG canvas. */
+/** Physical-pixel scaling for a logical Satori SVG canvas, including natural-height SVGs. */
 export interface RasterizeOptions {
   /** PNG density multiplier. Defaults to 2 for crisp chat-gateway previews. */
   scale?: number;
 }
 
-const DEFAULT_SCALE = 2;
-
 function resolveScale(scale: number | undefined): number {
-  const resolved = scale ?? DEFAULT_SCALE;
+  const resolved = scale ?? DEFAULT_RENDER_SCALE;
   if (!Number.isFinite(resolved) || resolved < 1) {
     throw new RangeError("Render scale must be a finite number greater than or equal to 1.");
   }
@@ -32,4 +31,4 @@ export function rasterizeSvg(svg: string, options: RasterizeOptions = {}): Buffe
   return image.asPng();
 }
 
-export { DEFAULT_SCALE };
+export { DEFAULT_RENDER_SCALE as DEFAULT_SCALE };

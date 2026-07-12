@@ -1,9 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { validateSpec } from "../../validate";
-import { resolveTheme } from "../../../render/resolve-theme";
-import { renderToPng } from "../../../render/index";
-import { getTokens } from "../../../tokens/index";
-import type { ThemeName } from "../../../tokens/palettes";
+import { validateSpec } from "./validate";
+import { resolveTheme } from "../render/resolve-theme";
+import { renderToPng } from "../render/index";
+import { getTokens } from "../tokens/index";
+import type { ThemeName } from "../tokens/palettes";
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const themes: ThemeName[] = ["light", "dark"];
@@ -90,6 +90,60 @@ describe("Card composite primitive", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.path).toBe(".elements.card.props.header");
   });
+});
+
+/**
+ * Card is a content-sized column unless its own parent constrains it. Its body
+ * must therefore retain its intrinsic height instead of flex-growing into an
+ * indefinite main axis and starving every body child. These fixtures cover the
+ * complete catalog families that previously collapsed under that condition.
+ */
+function cardBodyFixture(component: string): SpecInput {
+  const elements: Record<string, unknown> = {
+    frame: {
+      type: "Frame",
+      props: { width: 640, height: 480, padding: 24, backgroundColor: { $theme: "color.background" } },
+      children: ["card"],
+    },
+    card: { type: "Card", props: {}, children: ["title", component] },
+    title: { type: "Heading", props: { text: `Card ${component}`, level: "h3" }, children: [] },
+  };
+
+  const fixtures: Record<string, unknown> = {
+    bar: { type: "BarChart", props: { width: 480, height: 180, data: [12, 28, 20, 36] }, children: [] },
+    line: { type: "LineChart", props: { width: 480, height: 180, data: [12, 28, 20, 36] }, children: [] },
+    spark: { type: "Sparkline", props: { width: 480, height: 100, data: [12, 28, 20, 36] }, children: [] },
+    pie: {
+      type: "PieChart",
+      props: { size: 180, donut: true, centerLabel: "70%", data: [{ label: "Used", value: 70 }, { label: "Free", value: 30 }] },
+      children: [],
+    },
+    ring: { type: "ProgressRing", props: { size: 180, value: 70, label: "70%" }, children: [] },
+    metric: { type: "Metric", props: { label: "Revenue", value: "$48.2k", sparkline: { data: [12, 28, 20, 36] } }, children: [] },
+    table: { type: "Table", props: { header: ["Name", "Value"], rows: [["Alpha", "12"], ["Beta", "24"]] }, children: [] },
+    list: { type: "List", props: { items: ["Alpha", "Beta", "Gamma"] }, children: [] },
+    nested: { type: "Card", props: {}, children: ["nestedText"] },
+    nestedText: { type: "Text", props: { text: "Nested Card content remains visible." }, children: [] },
+  };
+
+  elements[component] = fixtures[component];
+  if (component === "nested") elements.nestedText = fixtures.nestedText;
+  return { root: "frame", elements };
+}
+
+describe("Card body intrinsic sizing regression", () => {
+  const components = ["bar", "line", "spark", "pie", "ring", "metric", "table", "list", "nested"];
+
+  for (const theme of themes) {
+    for (const component of components) {
+      it(`keeps ${component} content visible in a height-less Card in ${theme}`, async () => {
+        const png = await expectRenders(cardBodyFixture(component), theme);
+        // A collapsed Card body produces a mostly empty 640×480 canvas. Full
+        // content has a stable, materially larger encoded representation.
+        expect(png.byteLength).toBeGreaterThan(15_000);
+      });
+    }
+  }
 });
 
 describe("Table composite primitive", () => {

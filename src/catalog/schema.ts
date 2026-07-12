@@ -19,7 +19,9 @@ const flexDirection = z.enum(["row", "column"]);
 
 export const framePropsSchema = z.object({
   width: z.number(),
-  height: z.number(),
+  // A missing height opts the Frame into Satori/Yoga's natural layout height.
+  // Width remains required so chat-gateway output stays predictable.
+  height: z.number().optional(),
   backgroundColor: colorValue.nullable().optional(),
   padding: z.number().nullable().optional(),
   display: z.enum(["flex", "none"]).nullable().optional(),
@@ -98,6 +100,56 @@ export const headingPropsSchema = z.object({
 export type HeadingProps = z.infer<typeof headingPropsSchema>;
 
 /* ------------------------------------------------------------------ *
+ * Icon (Wave 9, MH14): HugeIcons free-tier vector icon.               *
+ *                                                                     *
+ * Renders a named icon's raw SVG path/shape data (from                *
+ * `@hugeicons/core-free-icons`) through the SAME inline-<svg> Satori   *
+ * pattern the chart components use — no font, no CDN, no credentials.  *
+ * `name` is the kebab-case lookup string (e.g. "search",              *
+ * "notification-03"); it is validated against the actual imported     *
+ * icon set in `validate.ts`, so an unknown name returns a structured  *
+ * VALIDATION_ERROR rather than crashing or rendering nothing. `color` *
+ * takes a `$theme` ref like every other color prop and defaults to    *
+ * the foreground token; `strokeWidth` matches HugeIcons' own 1.5.     *
+ * ------------------------------------------------------------------ */
+
+/**
+ * Icon — a single HugeIcons free-tier vector icon. `name` is the kebab-case
+ * icon name (see the Icons reference for the full list); `size` is the square
+ * px size (default 24); `color` is the stroke/fill color (a `$theme.color.*`
+ * ref, default the foreground token); `strokeWidth` tunes the line weight
+ * (default 1.5, matching HugeIcons' Stroke Rounded style).
+ */
+export const iconPropsSchema = z.object({
+  /** Kebab-case icon name (e.g. "search", "notification-03", "arrow-right-01"). */
+  name: z.string(),
+  /** Square icon size in px. Defaults to 24. */
+  size: themeableNumber.nullable().optional(),
+  /** Icon color. Use a `$theme.color.*` ref; defaults to color.foreground. */
+  color: colorValue.nullable().optional(),
+  /** Stroke line weight in px. Defaults to 1.5 (HugeIcons' own default). */
+  strokeWidth: z.number().positive().nullable().optional(),
+});
+export type IconProps = z.infer<typeof iconPropsSchema>;
+
+/**
+ * An optional inline icon slot shared by Badge, Alert, and Metric. Either a bare
+ * icon-name string, or a `{ name, color?, size?, strokeWidth? }` object for
+ * per-slot overrides. The host component supplies a sensible default color/size
+ * (usually inheriting its own foreground) when only a name is given.
+ */
+export const iconSlot = z.union([
+  z.string(),
+  z.object({
+    name: z.string(),
+    color: colorValue.nullable().optional(),
+    size: z.number().positive().nullable().optional(),
+    strokeWidth: z.number().positive().nullable().optional(),
+  }),
+]);
+export type IconSlot = z.infer<typeof iconSlot>;
+
+/* ------------------------------------------------------------------ *
  * Content primitives (Wave 3, Task 3.2): Badge, Avatar, Alert, List. *
  *                                                                     *
  * Variant enums are ergonomic hints; the concrete per-variant colors *
@@ -136,6 +188,8 @@ export const badgePropsSchema = z.object({
   borderRadius: z.number().nullable().optional(),
   letterSpacing: z.union([z.number(), z.string()]).nullable().optional(),
   uppercase: z.boolean().nullable().optional(),
+  /** Optional leading HugeIcons icon (name string or `{ name, color?, size? }`). */
+  iconName: iconSlot.nullable().optional(),
 });
 export type BadgeProps = z.infer<typeof badgePropsSchema>;
 
@@ -181,6 +235,8 @@ export const alertPropsSchema = z.object({
   padding: z.number().nullable().optional(),
   gap: z.number().nullable().optional(),
   showAccentBar: z.boolean().nullable().optional(),
+  /** Optional leading HugeIcons icon (name string or `{ name, color?, size? }`). */
+  iconName: iconSlot.nullable().optional(),
 });
 export type AlertProps = z.infer<typeof alertPropsSchema>;
 
@@ -665,8 +721,14 @@ export const metricPropsSchema = z.object({
   sparklinePosition: z.enum(["below", "right"]).nullable().optional(),
   /** Drop the card surface (border/background/padding) — render bare. */
   plain: z.boolean().nullable().optional(),
-  /** Optional small icon/emoji glyph shown beside the label. */
+  /** Optional small icon/emoji glyph shown beside the label (plain text/emoji). */
   icon: z.string().nullable().optional(),
+  /**
+   * Optional leading HugeIcons vector icon shown beside the label — distinct
+   * from the plain-text `icon` above. Name string or `{ name, color?, size? }`.
+   * When both are set, the vector `iconName` takes precedence.
+   */
+  iconName: iconSlot.nullable().optional(),
 
   // --- token-driven styling (all accept `$theme` refs) ---
   backgroundColor: colorValue.nullable().optional(),
