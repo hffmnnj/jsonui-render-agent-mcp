@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { registerListComponents } from "./list-components.js";
 import { registerPing } from "./ping.js";
 import { registerRenderUi } from "./render-ui.js";
 
@@ -11,4 +12,5 @@ import { registerRenderUi } from "./render-ui.js";
 export function registerTools(server: McpServer): void {
   registerPing(server);
   registerRenderUi(server);
+  registerListComponents(server);
 }
