@@ -1,0 +1,380 @@
+{
+  "root": "frame",
+  "elements": {
+    "frame": {
+      "type": "Frame",
+      "props": {
+        "width": 1200,
+        "height": 1020,
+        "padding": 32,
+        "backgroundColor": { "$theme": "color.background" },
+        "flexDirection": "column"
+      },
+      "children": ["headerRow", "metricsGrid", "midRow", "bottomRow"]
+    },
+
+    "headerRow": {
+      "type": "Row",
+      "props": { "alignItems": "center", "justifyContent": "space-between" },
+      "children": ["headerText", "headerBadges"]
+    },
+    "headerText": {
+      "type": "Stack",
+      "props": { "gap": 4 },
+      "children": ["title", "subtitle"]
+    },
+    "title": {
+      "type": "Heading",
+      "props": { "text": "Acme Cloud — Platform Overview", "level": "h2", "letterSpacing": "-0.02em" },
+      "children": []
+    },
+    "subtitle": {
+      "type": "Text",
+      "props": { "text": "Last 30 days · updated just now", "fontSize": 14, "color": { "$theme": "color.mutedForeground" } },
+      "children": []
+    },
+    "headerBadges": {
+      "type": "Row",
+      "props": { "gap": 8, "alignItems": "center" },
+      "children": ["badgeLive", "badgeRegion"]
+    },
+    "badgeLive": {
+      "type": "Badge",
+      "props": {
+        "text": "All systems operational",
+        "variant": "success",
+        "uppercase": true,
+        "backgroundColor": { "$theme": "color.success.subtle" },
+        "color": { "$theme": "color.success.bg" },
+        "borderColor": { "$theme": "color.success.border" },
+        "borderWidth": 1
+      },
+      "children": []
+    },
+    "badgeRegion": {
+      "type": "Badge",
+      "props": {
+        "text": "us-east-1",
+        "backgroundColor": { "$theme": "color.surfaceMuted" },
+        "color": { "$theme": "color.mutedForeground" }
+      },
+      "children": []
+    },
+
+    "metricsGrid": {
+      "type": "Grid",
+      "props": { "columns": 4, "gap": 20 },
+      "children": ["mRevenue", "mUsers", "mLatency", "mErrors"]
+    },
+    "mRevenue": {
+      "type": "Metric",
+      "props": {
+        "label": "Monthly Revenue",
+        "value": "$48.2k",
+        "caption": "vs. $42.9k last month",
+        "delta": { "value": "12.4%", "direction": "up" },
+        "sparkline": {
+          "data": [30, 34, 32, 38, 40, 44, 48],
+          "height": 40,
+          "smooth": true,
+          "color": { "$theme": "color.success.bg" },
+          "areaColor": { "$theme": "color.success.bg" }
+        },
+        "backgroundColor": { "$theme": "color.surface" },
+        "borderColor": { "$theme": "color.border" },
+        "labelColor": { "$theme": "color.mutedForeground" },
+        "valueColor": { "$theme": "color.foreground" },
+        "captionColor": { "$theme": "color.subtleForeground" },
+        "positiveColor": { "$theme": "color.success.bg" },
+        "negativeColor": { "$theme": "color.danger.bg" },
+        "elevation": { "$theme": "elevation.sm" }
+      },
+      "children": []
+    },
+    "mUsers": {
+      "type": "Metric",
+      "props": {
+        "label": "Active Users",
+        "value": "18,430",
+        "caption": "7-day rolling",
+        "delta": { "value": "8.1%", "direction": "up" },
+        "sparkline": {
+          "data": [12, 13, 15, 14, 16, 17, 18],
+          "height": 40,
+          "smooth": true,
+          "color": { "$theme": "color.accent.bg" },
+          "areaColor": { "$theme": "color.accent.bg" }
+        },
+        "backgroundColor": { "$theme": "color.surface" },
+        "borderColor": { "$theme": "color.border" },
+        "labelColor": { "$theme": "color.mutedForeground" },
+        "valueColor": { "$theme": "color.foreground" },
+        "captionColor": { "$theme": "color.subtleForeground" },
+        "positiveColor": { "$theme": "color.success.bg" },
+        "negativeColor": { "$theme": "color.danger.bg" },
+        "elevation": { "$theme": "elevation.sm" }
+      },
+      "children": []
+    },
+    "mLatency": {
+      "type": "Metric",
+      "props": {
+        "label": "p95 Latency",
+        "value": "142ms",
+        "caption": "down is better",
+        "delta": { "value": "6.3%", "direction": "down", "intent": "positive" },
+        "sparkline": {
+          "data": [188, 176, 181, 165, 158, 149, 142],
+          "height": 40,
+          "smooth": true,
+          "color": { "$theme": "color.success.bg" },
+          "areaColor": { "$theme": "color.success.bg" }
+        },
+        "backgroundColor": { "$theme": "color.surface" },
+        "borderColor": { "$theme": "color.border" },
+        "labelColor": { "$theme": "color.mutedForeground" },
+        "valueColor": { "$theme": "color.foreground" },
+        "captionColor": { "$theme": "color.subtleForeground" },
+        "positiveColor": { "$theme": "color.success.bg" },
+        "negativeColor": { "$theme": "color.danger.bg" },
+        "elevation": { "$theme": "elevation.sm" }
+      },
+      "children": []
+    },
+    "mErrors": {
+      "type": "Metric",
+      "props": {
+        "label": "Error Rate",
+        "value": "0.38%",
+        "caption": "vs. 0.29% last week",
+        "delta": { "value": "0.09pp", "direction": "up", "intent": "negative" },
+        "sparkline": {
+          "data": [0.22, 0.25, 0.24, 0.28, 0.31, 0.35, 0.38],
+          "height": 40,
+          "smooth": true,
+          "color": { "$theme": "color.danger.bg" },
+          "areaColor": { "$theme": "color.danger.bg" }
+        },
+        "backgroundColor": { "$theme": "color.surface" },
+        "borderColor": { "$theme": "color.border" },
+        "labelColor": { "$theme": "color.mutedForeground" },
+        "valueColor": { "$theme": "color.foreground" },
+        "captionColor": { "$theme": "color.subtleForeground" },
+        "positiveColor": { "$theme": "color.success.bg" },
+        "negativeColor": { "$theme": "color.danger.bg" },
+        "elevation": { "$theme": "elevation.sm" }
+      },
+      "children": []
+    },
+
+    "midRow": {
+      "type": "Row",
+      "props": { "gap": 20, "alignItems": "flex-start" },
+      "children": ["trafficPanel", "uptimePanel"]
+    },
+    "trafficPanel": {
+      "type": "Box",
+      "props": {
+        "flex": 2,
+        "padding": 24,
+        "backgroundColor": { "$theme": "color.surface" },
+        "borderColor": { "$theme": "color.border" },
+        "borderWidth": 1,
+        "borderRadius": 16
+      },
+      "children": ["trafficTitle", "trafficLegend", "trafficChart"]
+    },
+    "trafficTitle": {
+      "type": "Heading",
+      "props": { "text": "Requests per day (millions)", "level": "h4" },
+      "children": []
+    },
+    "trafficLegend": {
+      "type": "Row",
+      "props": { "gap": 16, "alignItems": "center", "padding": 0 },
+      "children": ["legendThis", "legendLast"]
+    },
+    "legendThis": {
+      "type": "Badge",
+      "props": {
+        "text": "This month",
+        "backgroundColor": { "$theme": "color.accent.subtle" },
+        "color": { "$theme": "color.accent.bg" }
+      },
+      "children": []
+    },
+    "legendLast": {
+      "type": "Badge",
+      "props": {
+        "text": "Last month",
+        "backgroundColor": { "$theme": "color.surfaceMuted" },
+        "color": { "$theme": "color.mutedForeground" }
+      },
+      "children": []
+    },
+    "trafficChart": {
+      "type": "LineChart",
+      "props": {
+        "series": [
+          { "name": "This month", "data": [8.2, 9.1, 8.7, 10.4, 11.2, 12.9, 12.1, 13.6, 14.2, 13.8, 15.1, 16.4] },
+          { "name": "Last month", "data": [7.1, 7.6, 7.9, 8.2, 9.0, 9.4, 9.1, 9.8, 10.2, 10.0, 10.6, 11.1] }
+        ],
+        "width": 700,
+        "height": 260,
+        "smooth": true,
+        "showPoints": false,
+        "showAxisLabels": false,
+        "colors": { "$theme": "color.chart" },
+        "gridColor": { "$theme": "color.border" },
+        "labelColor": { "$theme": "color.mutedForeground" }
+      },
+      "children": []
+    },
+    "uptimePanel": {
+      "type": "Box",
+      "props": {
+        "flex": 1,
+        "padding": 24,
+        "alignItems": "center",
+        "backgroundColor": { "$theme": "color.surface" },
+        "borderColor": { "$theme": "color.border" },
+        "borderWidth": 1,
+        "borderRadius": 16
+      },
+      "children": ["uptimeTitle", "uptimeRing", "uptimeCaption"]
+    },
+    "uptimeTitle": {
+      "type": "Heading",
+      "props": { "text": "SLA Uptime", "level": "h4", "align": "center" },
+      "children": []
+    },
+    "uptimeRing": {
+      "type": "ProgressRing",
+      "props": {
+        "value": 99.98,
+        "max": 100,
+        "size": 200,
+        "label": "99.98%",
+        "sublabel": "30-day uptime",
+        "trackColor": { "$theme": "color.surfaceMuted" },
+        "fillColor": { "$theme": "color.success.bg" },
+        "labelColor": { "$theme": "color.foreground" },
+        "sublabelColor": { "$theme": "color.mutedForeground" }
+      },
+      "children": []
+    },
+    "uptimeCaption": {
+      "type": "Text",
+      "props": {
+        "text": "Well above the 99.9% SLA target",
+        "fontSize": 13,
+        "align": "center",
+        "color": { "$theme": "color.mutedForeground" }
+      },
+      "children": []
+    },
+
+    "bottomRow": {
+      "type": "Row",
+      "props": { "gap": 20, "alignItems": "flex-start" },
+      "children": ["servicesPanel", "sideStack"]
+    },
+    "servicesPanel": {
+      "type": "Box",
+      "props": {
+        "flex": 2,
+        "padding": 24,
+        "backgroundColor": { "$theme": "color.surface" },
+        "borderColor": { "$theme": "color.border" },
+        "borderWidth": 1,
+        "borderRadius": 16
+      },
+      "children": ["servicesTitle", "servicesTable"]
+    },
+    "servicesTitle": {
+      "type": "Heading",
+      "props": { "text": "Service Health", "level": "h4" },
+      "children": []
+    },
+    "servicesTable": {
+      "type": "Table",
+      "props": {
+        "header": ["Service", "Status", "p95", "Uptime"],
+        "rows": [
+          ["API Gateway", { "text": "Operational", "color": { "$theme": "color.success.bg" } }, "118ms", "99.99%"],
+          ["Auth Service", { "text": "Operational", "color": { "$theme": "color.success.bg" } }, "94ms", "99.98%"],
+          ["Database", { "text": "Degraded", "color": { "$theme": "color.warning.bg" } }, "236ms", "99.91%"],
+          ["Object Store", { "text": "Operational", "color": { "$theme": "color.success.bg" } }, "62ms", "100.0%"]
+        ],
+        "striped": true,
+        "headerBackgroundColor": { "$theme": "color.surfaceMuted" },
+        "headerColor": { "$theme": "color.foreground" },
+        "color": { "$theme": "color.mutedForeground" },
+        "borderColor": { "$theme": "color.border" },
+        "stripeColor": { "$theme": "color.surfaceMuted" }
+      },
+      "children": []
+    },
+    "sideStack": {
+      "type": "Stack",
+      "props": { "gap": 20, "flex": 1 },
+      "children": ["storagePanel", "capacityAlert"]
+    },
+    "storagePanel": {
+      "type": "Box",
+      "props": {
+        "padding": 24,
+        "backgroundColor": { "$theme": "color.surface" },
+        "borderColor": { "$theme": "color.border" },
+        "borderWidth": 1,
+        "borderRadius": 16
+      },
+      "children": ["storageTitle", "storageProgress", "bandwidthProgress"]
+    },
+    "storageTitle": {
+      "type": "Heading",
+      "props": { "text": "Resource Usage", "level": "h4" },
+      "children": []
+    },
+    "storageProgress": {
+      "type": "Progress",
+      "props": {
+        "value": 72,
+        "label": "Storage",
+        "showValue": true,
+        "height": 10,
+        "trackColor": { "$theme": "color.surfaceMuted" },
+        "fillColor": { "$theme": "color.accent.bg" },
+        "labelColor": { "$theme": "color.mutedForeground" }
+      },
+      "children": []
+    },
+    "bandwidthProgress": {
+      "type": "Progress",
+      "props": {
+        "value": 41,
+        "label": "Bandwidth",
+        "showValue": true,
+        "height": 10,
+        "trackColor": { "$theme": "color.surfaceMuted" },
+        "fillColor": { "$theme": "color.info.bg" },
+        "labelColor": { "$theme": "color.mutedForeground" }
+      },
+      "children": []
+    },
+    "capacityAlert": {
+      "type": "Alert",
+      "props": {
+        "title": "Storage nearing limit",
+        "text": "You're using 72% of your plan's storage. Consider upgrading before the next billing cycle.",
+        "variant": "warning",
+        "backgroundColor": { "$theme": "color.warning.subtle" },
+        "borderColor": { "$theme": "color.warning.border" },
+        "titleColor": { "$theme": "color.warning.bg" },
+        "color": { "$theme": "color.mutedForeground" },
+        "accentColor": { "$theme": "color.warning.bg" }
+      },
+      "children": []
+    }
+  }
+}

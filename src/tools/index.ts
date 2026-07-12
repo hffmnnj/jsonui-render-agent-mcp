@@ -1,5 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { registerListComponents } from "./list-components.js";
 import { registerPing } from "./ping.js";
+import { registerRenderUi } from "./render-ui.js";
 
 /**
  * Register all tools on the given MCP server instance.
@@ -9,4 +11,6 @@ import { registerPing } from "./ping.js";
  */
 export function registerTools(server: McpServer): void {
   registerPing(server);
+  registerRenderUi(server);
+  registerListComponents(server);
 }
