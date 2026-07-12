@@ -9,6 +9,7 @@ import {
   framePropsSchema,
   gridPropsSchema,
   headingPropsSchema,
+  iconPropsSchema,
   lineChartPropsSchema,
   listPropsSchema,
   metricPropsSchema,
@@ -23,6 +24,7 @@ import {
   textPropsSchema,
 } from "./schema";
 import { catalog } from "./index";
+import { isIconName } from "./icons";
 import type { Spec, UIElement } from "@json-render/core";
 import type { z } from "zod";
 
@@ -49,6 +51,7 @@ const componentPropsSchemas = {
   Row: rowPropsSchema,
   Text: textPropsSchema,
   Heading: headingPropsSchema,
+  Icon: iconPropsSchema,
   Grid: gridPropsSchema,
   Spacer: spacerPropsSchema,
   Divider: dividerPropsSchema,
@@ -124,6 +127,46 @@ function validateElementProps(
   const propsResult = propsSchema.safeParse(element.props);
   if (!propsResult.success) {
     return zodErrorToResult(propsResult.error, `.elements.${key}.props`);
+  }
+
+  const iconError = validateIconNames(key, type, element.props);
+  if (iconError) return iconError;
+
+  return undefined;
+}
+
+/**
+ * Semantic icon-name validation (MH14). The Zod schema only proves `name` is a
+ * string; here we confirm it resolves to a real free-tier icon so an unknown
+ * name returns a structured VALIDATION_ERROR (per MH10) instead of crashing or
+ * silently rendering nothing. Covers the standalone `Icon.name` prop and the
+ * optional `iconName` slot on Badge/Alert/Metric (a bare string or a
+ * `{ name }` object).
+ */
+function validateIconNames(
+  key: string,
+  type: ComponentName,
+  props: Record<string, unknown>
+): ValidationError | undefined {
+  const badName = (name: string, path: string): ValidationError =>
+    validationError(
+      `.elements.${key}.props${path}`,
+      `Unknown icon name "${name}". Icon names are kebab-case HugeIcons free-tier names (e.g. "search", "notification-03", "arrow-right-01").`
+    );
+
+  if (type === "Icon") {
+    const name = props.name;
+    if (typeof name === "string" && !isIconName(name)) return badName(name, ".name");
+    return undefined;
+  }
+
+  const slot = props.iconName;
+  if (slot === undefined || slot === null) return undefined;
+  if (typeof slot === "string") {
+    if (!isIconName(slot)) return badName(slot, ".iconName");
+  } else if (typeof slot === "object") {
+    const name = (slot as { name?: unknown }).name;
+    if (typeof name === "string" && !isIconName(name)) return badName(name, ".iconName.name");
   }
 
   return undefined;
