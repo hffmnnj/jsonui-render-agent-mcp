@@ -76,6 +76,7 @@ renders/
 *.png
 !**/static/**/*.png
 !**/assets/**/*.png
+!docs/images/*.png
 
 # Bun build cache
 .bun/
