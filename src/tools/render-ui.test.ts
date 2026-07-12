@@ -50,6 +50,10 @@ function structuredError(result: ToolResponse): StructuredError {
   return JSON.parse(result.content[0]?.text ?? "") as StructuredError;
 }
 
+function pngDimensions(png: Buffer): { width: number; height: number } {
+  return { width: png.readUInt32BE(16), height: png.readUInt32BE(20) };
+}
+
 async function withClient<T>(callback: (client: Client) => Promise<T>): Promise<T> {
   const transport = new StdioClientTransport({
     command: Bun.which("bun") ?? process.execPath,
@@ -134,6 +138,37 @@ describe("render_ui tool", () => {
     });
   });
 
+  test("auto-sizes a Frame without height to its content layout", async () => {
+    await withClient(async (client) => {
+      const spec: { elements: { frame: { props: Record<string, unknown> } } } = minimalSpec();
+      delete spec.elements.frame.props.height;
+      const result = (await client.callTool({
+        name: "render_ui",
+        arguments: { spec, theme: "light" },
+      })) as ToolResponse;
+
+      expect(result.isError).toBeUndefined();
+      const png = Buffer.from(result.content[0]!.data!, "base64");
+      const dimensions = pngDimensions(png);
+      expect(dimensions.width).toBe(640);
+      expect(dimensions.height).toBeGreaterThan(100);
+      expect(dimensions.height).toBeLessThan(500);
+      expect(dimensions.height).not.toBe(1260);
+    });
+  });
+
+  test("accepts autoSize as an explicit content-height request", async () => {
+    await withClient(async (client) => {
+      const result = (await client.callTool({
+        name: "render_ui",
+        arguments: { spec: minimalSpec(), theme: "light", autoSize: true },
+      })) as ToolResponse;
+
+      expect(result.isError).toBeUndefined();
+      expect(pngDimensions(Buffer.from(result.content[0]!.data!, "base64")).height).toBeLessThan(360);
+    });
+  });
+
   test("returns a structured validation error for an invalid spec without crashing", async () => {
     await withClient(async (client) => {
       const result = (await client.callTool({
@@ -163,7 +198,7 @@ describe("render_ui tool", () => {
           spec: {
             root: "frame",
             elements: {
-              frame: { type: "Frame", props: { width: 320 }, children: [] },
+              frame: { type: "Frame", props: { height: 180 }, children: [] },
             },
           },
           theme: "light",

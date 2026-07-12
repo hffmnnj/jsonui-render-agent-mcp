@@ -19,7 +19,9 @@ const flexDirection = z.enum(["row", "column"]);
 
 export const framePropsSchema = z.object({
   width: z.number(),
-  height: z.number(),
+  // A missing height opts the Frame into Satori/Yoga's natural layout height.
+  // Width remains required so chat-gateway output stays predictable.
+  height: z.number().optional(),
   backgroundColor: colorValue.nullable().optional(),
   padding: z.number().nullable().optional(),
   display: z.enum(["flex", "none"]).nullable().optional(),
