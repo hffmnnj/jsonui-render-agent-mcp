@@ -257,7 +257,7 @@ describe("validateSpec", () => {
       validateSpec({
         root: "root",
         elements: {
-          root: { type: "Frame", props: { width: 100 }, children: [] },
+          root: { type: "Frame", props: { height: 100 }, children: [] },
         },
       }),
       validateSpec({
