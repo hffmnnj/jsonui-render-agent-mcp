@@ -12,6 +12,7 @@ import {
   framePropsSchema,
   gridPropsSchema,
   headingPropsSchema,
+  iconPropsSchema,
   lineChartPropsSchema,
   listPropsSchema,
   metricPropsSchema,
@@ -90,6 +91,17 @@ export const catalog = defineCatalog(schema, {
       slots: [],
       description: "Heading text at various levels. h1 is largest, h4 is smallest.",
       example: { text: "Hello World", level: "h1", color: "#000000" },
+    },
+    Icon: {
+      props: iconPropsSchema,
+      slots: [],
+      description:
+        "A single HugeIcons free-tier vector icon (6,000+ names, Stroke Rounded). `name` is the kebab-case icon name (e.g. \"search\", \"notification-03\", \"arrow-right-01\"); `size` (default 24), `color` (a $theme.color.* ref, default color.foreground), and `strokeWidth` (default 1.5) are configurable. Renders as inline SVG — no font, no CDN. Badge/Alert/Metric also accept an optional `iconName` slot referencing the same icon set.",
+      example: {
+        name: "notification-03",
+        size: 24,
+        color: { $theme: "color.foreground" },
+      },
     },
     Badge: {
       props: badgePropsSchema,
@@ -317,6 +329,7 @@ export type StackProps = z.infer<typeof stackPropsSchema>;
 export type RowProps = z.infer<typeof rowPropsSchema>;
 export type TextProps = z.infer<typeof textPropsSchema>;
 export type HeadingProps = z.infer<typeof headingPropsSchema>;
+export type IconProps = z.infer<typeof iconPropsSchema>;
 export type BadgeProps = z.infer<typeof badgePropsSchema>;
 export type AvatarProps = z.infer<typeof avatarPropsSchema>;
 export type AlertProps = z.infer<typeof alertPropsSchema>;
